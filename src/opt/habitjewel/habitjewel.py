@@ -41,7 +41,7 @@ import habitjewel_utils
 
 osso_c = osso.Context("org.maemo.habitjewel", VERSION, False)
 
-
+# Layout pseudo-constants
 fhsize = gtk.HILDON_SIZE_FINGER_HEIGHT
 horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 verbtn = hildon.BUTTON_ARRANGEMENT_VERTICAL
@@ -49,6 +49,9 @@ ui_normal = gtk.HILDON_UI_MODE_NORMAL
 ui_edit = gtk.HILDON_UI_MODE_EDIT
 winprogind = hildon.hildon_gtk_window_set_progress_indicator
 thsize = gtk.HILDON_SIZE_THUMB_HEIGHT
+landscape_wrap_width = 700
+portrait_wrap_width = 380
+
 
 # Initialisation
 HOME = os.path.expanduser("~")
@@ -56,13 +59,21 @@ configdir = HOME + '/.habitjewel/'
 dbfile = configdir + 'database'
 logfile = configdir + 'log.txt'
 
-#detect if running locally or not
+
+# Detect if running locally or not
 runningpath = sys.path[0]
 
 if '/opt' in runningpath:
     locally = False
 else:
     locally = True
+
+if locally:
+    imgdir = 'pixmaps/'
+else:
+    appdir = '/opt/habitjewel/'
+    imgdir = appdir + 'pixmaps/'
+
 
 
 # Check for config dir, database. Create if necessary
@@ -162,21 +173,14 @@ else:
     cursor.close()
 
 
-if locally:
-    imgdir = 'pixmaps/'
-else:
-    appdir = '/opt/habitjewel/'
-    imgdir = appdir + 'pixmaps/'
-
-
-# Get today's date
-view_date = datetime.date.today()
+# Get today's date and use that as the date displayed on startup
+today = datetime.date.today()
+view_date = today
 
 
 class MainWindow:
 
     def __init__(self):
-
         gettext.install('habitjewel','/opt/habitjewel/share/locale')
         self.program = hildon.Program()
         self.program.__init__()
@@ -189,23 +193,26 @@ class MainWindow:
         self.program.add_window(self.window)
 
         self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
-        self.initialize_vars()
+        self.initialise_orientation()
 
         self.fontsize = 15
 
         menu = self.make_menu()
         self.window.set_app_menu(menu)
 
-        vbox = self.home_screen()
-        self.window.add(vbox)
+        container = self.home_screen()
+        self.window.add(container)
 
         self.window.show_all()
 
 
-    def initialize_vars(self):
-        self.title = ''
-        self.mode = 'new'
-        self.cat = _('Daily')
+    def initialise_orientation(self):
+        global portrait
+        portrait = self.is_portrait()
+        if (portrait):
+            self.line_wrap_width = portrait_wrap_width
+        else:
+            self.line_wrap_width = landscape_wrap_width
 
 
     def make_menu(self):
@@ -225,7 +232,6 @@ class MainWindow:
         button = gtk.Button(_("Delete"))
         button.connect("clicked", self.remove_habits)
         menu.append(button)
-
 
         button = gtk.Button(_("About"))
         button.connect("clicked", self.about)
@@ -247,49 +253,61 @@ class MainWindow:
         return
 
     def home_screen(self):
-        vbox = gtk.VBox()
-
-        parea = hildon.PannableArea()
+        vbox_outer = gtk.VBox()
+        pan_area = hildon.PannableArea()
 
         self.habitlist_tv = hildon.GtkTreeView(ui_normal)
 
         areaview = self.habitlist_tv.get_action_area_box()
         self.habitlist_tv.set_action_area_visible(True)
 
+        # HBox for prev button
         hbox = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
         hbox.pack_start(img, True, True, 0)
+        # Prev button
+        button_prev = hildon.Button(fhsize, horbtn)
+        button_prev.connect("clicked", self.prev_day)
+        button_prev.add(hbox)
 
-        button = hildon.Button(fhsize, horbtn)
-        button.connect("clicked", self.prev_day)
-        button.add(hbox)
-        areaview.pack_start(button, True, True, 0)
-
-        hbox = gtk.HBox()
+        # HBox for date display
+        hbox_date = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_calendar", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox.pack_start(img, True, True, 0)
+        hbox_date.pack_start(img, True, True, 0)
         self.date_label = gtk.Label()
         self.draw_date_label(self)
-        hbox.pack_start(self.date_label, True, True, 0)
-        areaview.pack_start(hbox, True, True, 0)
+        hbox_date.pack_start(self.date_label, True, True, 0)
 
+        # HBox for next button
         hbox = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
         hbox.pack_start(img, True, True, 0)
+        # Next button
+        button_next = hildon.Button(fhsize, horbtn)
+        button_next.connect("clicked", self.next_day)
+        button_next.add(hbox)
 
-        button = hildon.Button(fhsize, horbtn)
-        button.connect("clicked", self.next_day)
-        button.add(hbox)
-        areaview.pack_start(button, True, True, 0)
+        if (not self.is_portrait()):
+            areaview.pack_start(button_prev, True, True, 0)
+            areaview.pack_start(hbox_date, True, True, 0)
+            areaview.pack_start(button_next, True, True, 0)
+        else:
+            vbox = gtk.VBox()
+            vbox.pack_start(hbox_date, True, True, 0)
+            hbox = gtk.HBox()
+            hbox.pack_start(button_prev, True, True, 0)
+            hbox.pack_start(button_next, True, True, 0)
+            vbox.pack_start(hbox, True, True, 0)
+            areaview.pack_start(vbox, True, True, 0)
 
         self.habit_list_model = self.create_habit_list_model(self)
         self.habitlist_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
 
-        parea.add(self.habitlist_tv)
-        vbox.pack_start(parea, True, True, 0)
+        pan_area.add(self.habitlist_tv)
+        vbox_outer.pack_start(pan_area, True, True, 0)
 
-        return vbox
+        return vbox_outer
 
 
     def create_habit_list_model(self, widget):
@@ -335,7 +353,7 @@ class MainWindow:
         # column for title
         renderer = gtk.CellRendererText()
         renderer.set_property('wrap-mode', gtk.WRAP_WORD)
-        renderer.set_property('wrap-width', 700)
+        renderer.set_property('wrap-width', self.line_wrap_width)
         column = gtk.TreeViewColumn('Habit title', renderer, markup=1)
         column.set_property("expand", True)
         treeview.append_column(column)
@@ -395,6 +413,11 @@ class MainWindow:
         self.draw_date_label(self)
         self.habit_list_model.clear()
         self.prepare_habit_list(self)
+        checkbox_col = self.habitlist_tv.get_column(4)
+        if (view_date <= today):
+            checkbox_col.set_visible(True)
+        else:
+            checkbox_col.set_visible(False)
         self.redraw_window()
 
 
@@ -472,6 +495,7 @@ class MainWindow:
         else:
             return True
 
+
     #FIXME: there's a bug that occurs with these steps:
     # 1) Start application in landscape, Edit a habit
     # 2) Go to portrait, go to landscape
@@ -480,6 +504,9 @@ class MainWindow:
     # 5) Edit a habit in portrait
     # 6) Go to landscape
     def orientation_changed(self, screen):
+        global portrait
+        portrait = is_portrait()
+
         if not self.image.get_parent_window():
             print 'not in the right screen, doing nothing'
             return

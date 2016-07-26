@@ -83,7 +83,6 @@ def get_habit_list(conn, view_date):
 
 def set_percent_complete (conn, habit_id, interval_type, view_date, percent):
     if (interval_type == 'Day'):
-        print "Interval type day"
         conn.execute(
             """
             INSERT OR REPLACE INTO history (id, habit_id, date, percent_complete)
