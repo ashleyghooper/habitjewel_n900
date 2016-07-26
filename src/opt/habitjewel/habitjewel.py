@@ -1,3 +1,25 @@
+#!/usr/bin/env python
+# -*- coding: UTF8 -*-
+# Copyright (C) 2016 by Ashley Hooper
+# <ashleyghooper@gmail.com>
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+#
+# HabitJewel: Track your habits
+# Version 0.1
+#
+
 VERSION = '0.1'
 
 import datetime
@@ -161,12 +183,12 @@ class MainWindow:
         gtk.set_application_name("Habitjewel")
 
         self.window = hildon.StackableWindow()
-        self.window.set_title(_("Habit Jewel"))
+        self.window.set_title(_("HabitJewel"))
         self.window.set_default_size(800, 480)
         self.window.connect("destroy", gtk.main_quit)
         self.program.add_window(self.window)
 
-        self.rotation = FremantleRotation('Habitjewel', None, VERSION, 0)
+        self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
         self.initialize_vars()
 
         self.fontsize = 15
