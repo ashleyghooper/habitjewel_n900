@@ -42,15 +42,16 @@ import habitjewel_utils
 osso_c = osso.Context("org.maemo.habitjewel", VERSION, False)
 
 # Layout pseudo-constants
-fhsize = gtk.HILDON_SIZE_FINGER_HEIGHT
-horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
-verbtn = hildon.BUTTON_ARRANGEMENT_VERTICAL
+BTN_ARR_HORIZ = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
+BTN_ARR_VERT  = hildon.BUTTON_ARRANGEMENT_VERTICAL
+BTN_SIZE_FINGER = gtk.HILDON_SIZE_FINGER_HEIGHT
+BTN_SIZE_THUMB  = gtk.HILDON_SIZE_THUMB_HEIGHT
+WRAP_WIDTH_LANDSCAPE = 700
+WRAP_WIDTH_PORTRAIT = 380
+# Unused?
 ui_normal = gtk.HILDON_UI_MODE_NORMAL
 ui_edit = gtk.HILDON_UI_MODE_EDIT
 winprogind = hildon.hildon_gtk_window_set_progress_indicator
-thsize = gtk.HILDON_SIZE_THUMB_HEIGHT
-landscape_wrap_width = 700
-portrait_wrap_width = 380
 
 
 # Initialisation
@@ -186,11 +187,19 @@ class MainWindow:
         self.program.__init__()
         gtk.set_application_name("Habitjewel")
 
-        self.window = hildon.StackableWindow()
-        self.window.set_title(_("HabitJewel"))
-        self.window.set_default_size(800, 480)
-        self.window.connect("destroy", gtk.main_quit)
-        self.program.add_window(self.window)
+        self.top_window = hildon.StackableWindow()
+        self.top_window.set_title(_("HabitJewel"))
+
+        # N900-specific
+        self.osso_app_name = 'habitjewel'
+
+        #self.top_window.set_default_size(800, 480)
+        #self.top_window.set_default_size(480, 800)
+        rotation_object = self.init_autorotation()
+
+        self.top_window.connect("destroy", gtk.main_quit)
+        self.top_window.get_screen().connect("size-changed", self.orientation_changed)
+        self.program.add_window(self.top_window)
 
         self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
         self.initialise_orientation()
@@ -198,21 +207,37 @@ class MainWindow:
         self.fontsize = 15
 
         menu = self.make_menu()
-        self.window.set_app_menu(menu)
+        self.top_window.set_app_menu(menu)
 
         container = self.home_screen()
-        self.window.add(container)
+        self.top_window.add(container)
 
-        self.window.show_all()
+        self.top_window.show_all()
+
+
+    def init_autorotation(self):
+        try:
+            import n900_maemo5_portrait
+
+            #rotation_mode = self.get('rotation_mode', "auto")
+            last_mode_number = 0 # Force auto-rotation
+            r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, \
+                main_window=self.top_window, mode=last_mode_number)
+            return r_object
+
+        except Exception:
+            print "LOGME: Initialising rotation object failed"
 
 
     def initialise_orientation(self):
         global portrait
         portrait = self.is_portrait()
         if (portrait):
-            self.line_wrap_width = portrait_wrap_width
+            self.line_wrap_width = WRAP_WIDTH_PORTRAIT
+            self.button_size = BTN_SIZE_THUMB
         else:
-            self.line_wrap_width = landscape_wrap_width
+            self.line_wrap_width = WRAP_WIDTH_LANDSCAPE
+            self.button_size = BTN_SIZE_FINGER
 
 
     def make_menu(self):
@@ -261,44 +286,45 @@ class MainWindow:
         areaview = self.habitlist_tv.get_action_area_box()
         self.habitlist_tv.set_action_area_visible(True)
 
-        # HBox for prev button
+        # HBox for 'prev' button
         hbox = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox.pack_start(img, True, True, 0)
-        # Prev button
-        button_prev = hildon.Button(fhsize, horbtn)
+        hbox.pack_start(img)
+        # 'Prev' button
+        button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
         button_prev.connect("clicked", self.prev_day)
         button_prev.add(hbox)
 
         # HBox for date display
         hbox_date = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_calendar", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox_date.pack_start(img, True, True, 0)
-        self.date_label = gtk.Label()
-        self.draw_date_label(self)
-        hbox_date.pack_start(self.date_label, True, True, 0)
+        hbox_date.pack_start(img)
+        label_text = self.get_date_label_text(self)
+        self.date_label = gtk.Label(label_text)
+        hbox_date.pack_start(self.date_label)
 
-        # HBox for next button
+        # HBox for 'next' button
         hbox = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox.pack_start(img, True, True, 0)
-        # Next button
-        button_next = hildon.Button(fhsize, horbtn)
+        hbox.pack_start(img)
+        # 'Next' button
+        button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
         button_next.connect("clicked", self.next_day)
         button_next.add(hbox)
 
+        vbox = gtk.VBox()
+        hbox = gtk.HBox()
         if (not self.is_portrait()):
-            areaview.pack_start(button_prev, True, True, 0)
-            areaview.pack_start(hbox_date, True, True, 0)
-            areaview.pack_start(button_next, True, True, 0)
+            hbox.pack_start(button_prev)
+            hbox.pack_start(hbox_date)
+            hbox.pack_start(button_next)
         else:
-            vbox = gtk.VBox()
-            vbox.pack_start(hbox_date, True, True, 0)
-            hbox = gtk.HBox()
-            hbox.pack_start(button_prev, True, True, 0)
-            hbox.pack_start(button_next, True, True, 0)
-            vbox.pack_start(hbox, True, True, 0)
-            areaview.pack_start(vbox, True, True, 0)
+            vbox.pack_start(hbox_date)
+            hbox.pack_start(button_prev)
+            hbox.pack_start(button_next)
+
+        vbox.pack_start(hbox)
+        areaview.pack_start(vbox)
 
         self.habit_list_model = self.create_habit_list_model(self)
         self.habitlist_tv.set_model(self.habit_list_model)
@@ -404,13 +430,14 @@ class MainWindow:
         self.redraw_habit_list(self)
 
 
-    def draw_date_label(self, widget):
+    def get_date_label_text(self, widget):
         date_disp = view_date.strftime("%a %d %B %Y")
-        self.date_label.set_text(date_disp)
+        return date_disp
 
 
     def redraw_habit_list(self, widget):
-        self.draw_date_label(self)
+        label_text = self.get_date_label_text(self)
+        self.date_label.set_text(label_text)
         self.habit_list_model.clear()
         self.prepare_habit_list(self)
         checkbox_col = self.habitlist_tv.get_column(4)
@@ -422,7 +449,7 @@ class MainWindow:
 
 
     def redraw_window(self):
-        self.window.queue_draw()
+        self.top_window.queue_draw()
 
 
     def habit_edit_screen(self, widget, kind, habit_id):
@@ -505,7 +532,7 @@ class MainWindow:
     # 6) Go to landscape
     def orientation_changed(self, screen):
         global portrait
-        portrait = is_portrait()
+        portrait = self.is_portrait()
 
         if not self.image.get_parent_window():
             print 'not in the right screen, doing nothing'
