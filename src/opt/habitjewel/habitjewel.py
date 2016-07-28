@@ -193,16 +193,14 @@ class MainWindow:
         # N900-specific
         self.osso_app_name = 'habitjewel'
 
-        #self.top_window.set_default_size(800, 480)
-        #self.top_window.set_default_size(480, 800)
-        rotation_object = self.init_autorotation()
+        self.rotation_obj = self.init_autorotation()
 
         self.top_window.connect("destroy", gtk.main_quit)
         self.top_window.get_screen().connect("size-changed", self.orientation_changed)
         self.program.add_window(self.top_window)
 
-        self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
-        self.initialise_orientation()
+        #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
+        self.init_disp_orientation()
 
         self.fontsize = 15
 
@@ -219,7 +217,6 @@ class MainWindow:
         try:
             import n900_maemo5_portrait
 
-            #rotation_mode = self.get('rotation_mode', "auto")
             last_mode_number = 0 # Force auto-rotation
             r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, \
                 main_window=self.top_window, mode=last_mode_number)
@@ -229,7 +226,7 @@ class MainWindow:
             print "LOGME: Initialising rotation object failed"
 
 
-    def initialise_orientation(self):
+    def init_disp_orientation(self):
         global portrait
         portrait = self.is_portrait()
         if (portrait):
@@ -278,22 +275,20 @@ class MainWindow:
         return
 
     def home_screen(self):
-        vbox_outer = gtk.VBox()
+        vbox_outer = gtk.VBox(False)
         pan_area = hildon.PannableArea()
 
         self.habitlist_tv = hildon.GtkTreeView(ui_normal)
-
         areaview = self.habitlist_tv.get_action_area_box()
-        self.habitlist_tv.set_action_area_visible(True)
 
         # HBox for 'prev' button
-        hbox = gtk.HBox()
+        hbox_prev = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox.pack_start(img)
+        hbox_prev.pack_start(img)
         # 'Prev' button
         button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
         button_prev.connect("clicked", self.prev_day)
-        button_prev.add(hbox)
+        button_prev.add(hbox_prev)
 
         # HBox for date display
         hbox_date = gtk.HBox()
@@ -304,34 +299,35 @@ class MainWindow:
         hbox_date.pack_start(self.date_label)
 
         # HBox for 'next' button
-        hbox = gtk.HBox()
+        hbox_next = gtk.HBox()
         img = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox.pack_start(img)
+        hbox_next.pack_start(img)
         # 'Next' button
         button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
         button_next.connect("clicked", self.next_day)
-        button_next.add(hbox)
+        button_next.add(hbox_next)
 
-        vbox = gtk.VBox()
-        hbox = gtk.HBox()
+        vbox_nav = gtk.VBox(False)
+        hbox_nav = gtk.HBox()
         if (not self.is_portrait()):
-            hbox.pack_start(button_prev)
-            hbox.pack_start(hbox_date)
-            hbox.pack_start(button_next)
+            hbox_nav.pack_start(button_prev)
+            hbox_nav.pack_start(hbox_date)
+            hbox_nav.pack_start(button_next)
         else:
-            vbox.pack_start(hbox_date)
-            hbox.pack_start(button_prev)
-            hbox.pack_start(button_next)
+            vbox_nav.pack_start(hbox_date)
+            hbox_nav.pack_start(button_prev)
+            hbox_nav.pack_start(button_next)
 
-        vbox.pack_start(hbox)
-        areaview.pack_start(vbox)
+        vbox_nav.pack_start(hbox_nav, False)
 
         self.habit_list_model = self.create_habit_list_model(self)
         self.habitlist_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
 
         pan_area.add(self.habitlist_tv)
-        vbox_outer.pack_start(pan_area, True, True, 0)
+
+        vbox_outer.pack_start(vbox_nav, False)
+        vbox_outer.pack_start(pan_area, True, True)
 
         return vbox_outer
 
@@ -533,6 +529,17 @@ class MainWindow:
     def orientation_changed(self, screen):
         global portrait
         portrait = self.is_portrait()
+
+        print "ORIENTATION CHANGED"
+
+        self.
+
+        self.init_disp_orientation()
+        self.home_screen()
+        self.redraw_window()
+
+        return
+
 
         if not self.image.get_parent_window():
             print 'not in the right screen, doing nothing'
