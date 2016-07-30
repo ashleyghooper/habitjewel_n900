@@ -1,6 +1,6 @@
-habitjewel (0.1.0-1) unstable; urgency=low
+habitjewel (0.1.1-1) unstable; urgency=low
 
- * Initial release to Maemo 5 repositories (Nokia N900).
+ * Fixed display bugs
 
 -- Ashley Hooper <ashleyghooper@gmail.com>  Mon, 25 Jul 2016 21:18:15 +1200
 

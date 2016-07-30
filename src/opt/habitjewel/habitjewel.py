@@ -530,16 +530,16 @@ class MainWindow:
         global portrait
         portrait = self.is_portrait()
 
-        print "ORIENTATION CHANGED"
+        print "ORIENTATION CHANGED - DO SOMETHING HERE"
 
-        self.
-
+        # This doesn't work!
         self.init_disp_orientation()
         self.home_screen()
         self.redraw_window()
 
         return
 
+        # Below example of reparenting etc from PyRecipe
 
         if not self.image.get_parent_window():
             print 'not in the right screen, doing nothing'
