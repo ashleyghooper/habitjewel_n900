@@ -22,6 +22,7 @@
 
 VERSION = '0.1'
 
+import CellRendererClickablePixbuf
 import datetime
 import gettext
 import gobject
@@ -69,6 +70,9 @@ if '/opt' in runningpath:
 else:
     locally = True
 
+############### REMOVE
+locally = True
+##########################################
 if locally:
     imgdir = 'pixmaps/'
 else:
@@ -207,8 +211,8 @@ class MainWindow:
         menu = self.make_menu()
         self.top_window.set_app_menu(menu)
 
-        container = self.home_screen()
-        self.top_window.add(container)
+        self.container = self.home_screen()
+        self.top_window.add(self.container)
 
         self.top_window.show_all()
 
@@ -275,71 +279,65 @@ class MainWindow:
         return
 
     def home_screen(self):
-        vbox_outer = gtk.VBox(False)
-        pan_area = hildon.PannableArea()
+        self.vbox_outer = gtk.VBox(False)
+        self.pan_area = hildon.PannableArea()
 
         self.habitlist_tv = hildon.GtkTreeView(ui_normal)
-        areaview = self.habitlist_tv.get_action_area_box()
+        self.areaview = self.habitlist_tv.get_action_area_box()
 
         # HBox for 'prev' button
-        hbox_prev = gtk.HBox()
-        img = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox_prev.pack_start(img)
+        self.hbox_prev = gtk.HBox()
+        self.img_prev = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.hbox_prev.pack_start(self.img_prev)
         # 'Prev' button
-        button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
-        button_prev.connect("clicked", self.prev_day)
-        button_prev.add(hbox_prev)
+        self.button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
+        self.button_prev.connect("clicked", self.prev_day)
+        self.button_prev.add(self.hbox_prev)
 
         # HBox for date display
-        hbox_date = gtk.HBox()
-        img = gtk.image_new_from_icon_name("general_calendar", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox_date.pack_start(img)
+        self.hbox_date = gtk.HBox()
+        self.img_date = gtk.image_new_from_icon_name("general_calendar", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.hbox_date.pack_start(self.img_date)
         label_text = self.get_date_label_text(self)
         self.date_label = gtk.Label(label_text)
-        hbox_date.pack_start(self.date_label)
+        self.hbox_date.pack_start(self.date_label)
 
         # HBox for 'next' button
-        hbox_next = gtk.HBox()
-        img = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
-        hbox_next.pack_start(img)
+        self.hbox_next = gtk.HBox()
+        self.img_next = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.hbox_next.pack_start(self.img_next)
         # 'Next' button
-        button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
-        button_next.connect("clicked", self.next_day)
-        button_next.add(hbox_next)
+        self.button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
+        self.button_next.connect("clicked", self.next_day)
+        self.button_next.add(self.hbox_next)
 
-        vbox_nav = gtk.VBox(False)
-        hbox_nav = gtk.HBox()
+        self.vbox_nav = gtk.VBox(False)
+        self.hbox_nav = gtk.HBox()
         if (not self.is_portrait()):
-            hbox_nav.pack_start(button_prev)
-            hbox_nav.pack_start(hbox_date)
-            hbox_nav.pack_start(button_next)
+            self.hbox_nav.pack_start(self.button_prev)
+            self.hbox_nav.pack_start(self.hbox_date)
+            self.hbox_nav.pack_start(self.button_next)
         else:
-            vbox_nav.pack_start(hbox_date)
-            hbox_nav.pack_start(button_prev)
-            hbox_nav.pack_start(button_next)
+            self.vbox_nav.pack_start(self.hbox_date)
+            self.hbox_nav.pack_start(self.button_prev)
+            self.hbox_nav.pack_start(self.button_next)
 
-        vbox_nav.pack_start(hbox_nav, False)
+        self.vbox_nav.pack_start(self.hbox_nav, False)
 
         self.habit_list_model = self.create_habit_list_model(self)
         self.habitlist_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
 
-        pan_area.add(self.habitlist_tv)
+        self.pan_area.add(self.habitlist_tv)
 
-        vbox_outer.pack_start(vbox_nav, False)
-        vbox_outer.pack_start(pan_area, True, True)
+        self.vbox_outer.pack_start(self.vbox_nav, False)
+        self.vbox_outer.pack_start(self.pan_area, True, True)
 
-        return vbox_outer
+        return self.vbox_outer
 
 
     def create_habit_list_model(self, widget):
-        lstore = gtk.ListStore(gobject.TYPE_INT, gobject.TYPE_STRING, gobject.TYPE_INT, \
-            gobject.TYPE_INT, gobject.TYPE_STRING)
-
-        #habitlist=[[id, 'title', 'unit', 'plural', 'target', 'goal', 'when', 
-        #   'interval_type', 'interval', 
-        #   'points', 'pct_complete', 'score', 'priority', 'cat_id', 'cat_title']...]
-
+        lstore = gtk.ListStore(int, str, str, gtk.gdk.Pixbuf, int, str)
         # add columns to the tree view
         self.add_columns_to_habit_list(self.habitlist_tv)
 
@@ -352,13 +350,21 @@ class MainWindow:
         for item in habitlist:
             lstore_iter = self.habit_list_model.append()
             if (item[10] == 100):
-                completed = 1
+                icon_filename = "checkbox_checked.png"
+                completed = 'Y'
+            elif (item[10] == 0):
+                icon_filename = "checkbox_crossed.png"
+                completed = 'N'
             else:
-                completed = 0
+                icon_filename = "checkbox_unchecked.png"
+                completed = None
+
+            icon = gtk.gdk.pixbuf_new_from_file(imgdir + icon_filename)
+ 
             self.habit_list_model.set(lstore_iter, 0, item[0], \
                 1, '<b>' + item[1] + '</b> ' + str(item[5]) \
                 + ' <i>' + item[6] + '</i>  for ' + str(item[9]) + ' pts', \
-                2, completed, 3, item[10], 4, item[7])
+                2, completed, 3, icon, 4, item[10], 5, item[7])
 
 
     def add_columns_to_habit_list(self, treeview):
@@ -380,23 +386,27 @@ class MainWindow:
         column.set_property("expand", True)
         treeview.append_column(column)
 
-        # column for percent complete
-        column = gtk.TreeViewColumn('Percent complete', gtk.CellRendererText(), text=3)
-        column.set_visible(False)
+        # column for checkbox
+        #checkbox = CellRendererClickablePixbuf()
+        checkbox = gtk.CellRendererPixbuf()
+        column = gtk.TreeViewColumn('Status', checkbox, pixbuf=3)
         treeview.append_column(column)
+
+        # column for percent complete
+        #column = gtk.TreeViewColumn('Percent complete', gtk.CellRendererText(), text=3)
+        #column.set_visible(False)
+        #treeview.append_column(column)
 
         # column for interval type
-        column = gtk.TreeViewColumn('Interval type', gtk.CellRendererText(), text=4)
-        column.set_visible(False)
-        treeview.append_column(column)
+        #column = gtk.TreeViewColumn('Interval type', gtk.CellRendererText(), text=4)
+        #column.set_visible(False)
+        #treeview.append_column(column)
 
-        # column for checkbox
-        checkbox = gtk.CellRendererToggle()
-        checkbox.connect("toggled", self.habit_toggled, treeview)
-        column = gtk.TreeViewColumn('Status', checkbox, active=2)
-        column.set_property("expand", True)
-        treeview.append_column(column)
-
+#        checkbox = gtk.CellRendererToggle()
+#        checkbox.connect("toggled", self.habit_toggled, treeview)
+#        column = gtk.TreeViewColumn('Status', checkbox, active=2)
+#        column.set_property("expand", True)
+#        treeview.append_column(column)
 
     def habit_toggled(self, widget, row_num, treeview):
         # Toggle habit completion status (0% / 100%)
@@ -436,7 +446,7 @@ class MainWindow:
         self.date_label.set_text(label_text)
         self.habit_list_model.clear()
         self.prepare_habit_list(self)
-        checkbox_col = self.habitlist_tv.get_column(4)
+        checkbox_col = self.habitlist_tv.get_column(2)
         if (view_date <= today):
             checkbox_col.set_visible(True)
         else:
@@ -530,12 +540,13 @@ class MainWindow:
         global portrait
         portrait = self.is_portrait()
 
-        print "ORIENTATION CHANGED - DO SOMETHING HERE"
-
-        # This doesn't work!
+        # This works but may be possible to improve on
         self.init_disp_orientation()
-        self.home_screen()
-        self.redraw_window()
+        self.top_window.remove(self.container)
+
+        self.container = self.home_screen()
+        self.top_window.add(self.container)
+        self.top_window.show_all()
 
         return
 
