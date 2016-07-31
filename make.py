@@ -4,7 +4,7 @@ import pypackager
 import os
 p=pypackager.PyPackager("habitjewel") #package name
 p.display_name = 'HabitJewel' #package display name in HAM
-p.version = '0.1.1' #package version
+p.version = '0.1.2' #package version
 p.buildversion = '1' #package build version
 p.description="""HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks.
 
@@ -34,6 +34,8 @@ chmod 755 /opt/habitjewel/habitjewel.py
 #p.postremove="""#!/bin/sh
 #"""
 p.changelog ="""
+v0.1.2
+  * Fixed rotation, graphical checkboxes, refactor, etc
 v0.1.1
   * Fixed display bugs
 v0.1.0

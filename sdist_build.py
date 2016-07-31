@@ -20,13 +20,15 @@ import glob,os
 for fpath in glob.glob('*/*.py[c|o]'):
     os.remove(fpath)
  
-changes = '* First packaging with sdist'
+changes = '* Fixed rotation, graphical checkboxes, refactor, etc'
  
 setup(name='habitjewel',
-      version='0.1.0',
+      version='0.1.2',
       license='GNU GPLv3',
-      description="Easily switch between Hildon and MSCIM input methods, and save battery.",
-      long_description="The version of MSCIM currently available in Fremantle wakes the CPU many times per second, reducing battery life. It also over-rides the Hildon input method, meaning the virtual keyboard and symbol keyboard stop working. This status menu applet allows you to switch between MSCIM and Hildon, and can 'pause' the scim-panel-gtk process to save the battery",
+      description="Record and track your progress in achieving your daily habits.",
+      long_description="HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks.
+
+Ultimately it will keep track of accomplishment of the habits, award points, and allow some statistics and graphing.",
       author='Ashley Hooper',
       author_email='ashleyghooper@gmail.com',
       maintainer=u'Ashley Hooper',
@@ -52,7 +54,7 @@ setup(name='habitjewel',
       cmdclass={'sdist_maemo': _sdist_maemo},
       options = { 'sdist_maemo':{
       'debian_package':'habitjewel',
-      'buildversion':'2',
+      'buildversion':'1',
       'depends':'python2.5, python-hildondesktop, hildon-desktop-python-loader',
       'conflicts':'',
       'XSBC_Bugtracker':'',
