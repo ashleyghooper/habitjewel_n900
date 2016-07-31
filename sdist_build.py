@@ -20,10 +20,10 @@ import glob,os
 for fpath in glob.glob('*/*.py[c|o]'):
     os.remove(fpath)
  
-changes = '* Fixed rotation, graphical checkboxes, refactor, etc'
+changes = '* Fixed bug with pixmaps dir when in /optm'
  
 setup(name='habitjewel',
-      version='0.1.2',
+      version='0.1.3',
       license='GNU GPLv3',
       description="Record and track your progress in achieving your daily habits.",
       long_description="HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks.
