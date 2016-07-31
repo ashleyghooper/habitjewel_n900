@@ -1,6 +1,6 @@
-habitjewel (0.1.2-1) unstable; urgency=low
+habitjewel (0.1.3-1) unstable; urgency=low
 
- * Fixed rotation, graphical checkboxes, refactor, etc
+ * Fixed bug with pixmaps dir when in /opt
 
--- Ashley Hooper <ashleyghooper@gmail.com>  Mon, 25 Jul 2016 21:18:15 +1200
+-- Ashley Hooper <ashleyghooper@gmail.com>  Mon, 1 Aug 2016 21:18:15 +1200
 

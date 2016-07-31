@@ -77,21 +77,17 @@ log_file = config_dir + 'log.txt'
 
 
 # Detect if running locally or not
-runningpath = sys.path[0]
-
-if '/opt' in runningpath:
+running_path = sys.path[0]
+if running_path.startswith('/opt'):
     locally = False
 else:
     locally = True
 
-############### REMOVE
-locally = True
-##########################################
 if locally:
-    imgdir = 'pixmaps/'
+    img_dir = 'pixmaps/'
 else:
-    appdir = '/opt/habitjewel/'
-    imgdir = appdir + 'pixmaps/'
+    app_dir = '/opt/habitjewel/'
+    img_dir = app_dir + 'pixmaps/'
 
 
 
@@ -389,7 +385,7 @@ class MainWindow:
         else:
             icon_filename = PIXBUF_FILE_UNKNOWN
 
-        return gtk.gdk.pixbuf_new_from_file(imgdir + icon_filename)
+        return gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
  
 
     def add_columns_to_habit_list(self, treeview):
