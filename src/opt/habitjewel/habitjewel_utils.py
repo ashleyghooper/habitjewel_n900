@@ -23,8 +23,8 @@ def get_habit_list(conn, view_date):
             interval_type, interval,
             points, 
             CASE interval_type
-                WHEN 'Day' THEN IFNULL(hsd.percent_complete, 0)
-                ELSE IFNULL(hsw.percent_complete, 0)
+                WHEN 'Day' THEN IFNULL(hsd.percent_complete, -1)
+                ELSE IFNULL(hsw.percent_complete, -1)
             END AS percent_complete,
             CASE interval_type
                 WHEN 'Day' THEN IFNULL(points * hsd.percent_complete, 0)
@@ -58,30 +58,30 @@ def get_habit_list(conn, view_date):
     habit_list=[]
 
     for i in range(len(rows)):
-        id = rows[i][0]
-        title = rows[i][1]
-        unit = rows[i][2]
-        plural = rows[i][3]
-        target = rows[i][4]
-        goal = rows[i][5]
-        by_when = rows[i][6]
-        interval_type = rows[i][7]
-        interval = rows[i][8]
-        points = rows[i][9]
-        pct_complete = rows[i][10]
-        score = rows[i][11]
-        priority = rows[i][12]
-        cat_id = rows[i][13]
-        cat_title = rows[i][14]
-
-        habit = (id, title, unit, plural, target, goal, by_when, interval_type, interval, \
-            points, pct_complete, score, priority, cat_id, cat_title)
+        row = rows[i]
+        habit = { \
+            'id':               row[0], \
+            'title':            row[1], \
+        	'unit':	            row[2], \
+        	'plural':   	    row[3], \
+        	'target':	        row[4], \
+        	'goal':	            row[5], \
+        	'by_when':	        row[6], \
+        	'interval_type':	row[7], \
+        	'interval':	        row[8], \
+        	'points':	        row[9], \
+        	'pct_complete':	    row[10], \
+        	'score':	        row[11], \
+        	'priority':	        row[12], \
+        	'cat_id':	        row[13], \
+        	'cat_title':	    row[14] \
+        }
         habit_list.append(habit)
 
     return habit_list
 
 
-def set_percent_complete (conn, habit_id, interval_type, view_date, percent):
+def set_fulfillment_status (conn, habit_id, interval_type, view_date, percent):
     if (interval_type == 'Day'):
         conn.execute(
             """
@@ -99,52 +99,3 @@ def set_percent_complete (conn, habit_id, interval_type, view_date, percent):
                     ?, DATE(?, 'weekday 0', '-6 day'), ?)
             """, [habit_id, view_date, habit_id, view_date, percent])
     conn.commit()
-
-
-def is_portrait():
-    width = gtk.gdk.screen_width()
-    height = gtk.gdk.screen_height()
-    if width > height:
-        return False
-    else:
-        return True
-
-
-#Show the hildon.filechooser dialog to open/save a file.
-def show_filechooser_dialog(window, action, title, name, format, EXT):
-    if action == 'open':
-        action = gtk.FILE_CHOOSER_ACTION_OPEN
-    elif action == 'save':
-        action = gtk.FILE_CHOOSER_ACTION_SAVE
-
-    m = hildon.FileSystemModel()
-    file_dialog = hildon.FileChooserDialog(window, action, m)
-    file_dialog.set_title(title + format)
-
-    portrait = is_portrait()
-    if portrait:
-        hildon.hildon_gtk_window_set_portrait_flags(file_dialog, 1)
-
-    file_dialog.set_current_name(name)
-    HOME = os.path.expanduser("~")
-
-    if os.path.exists(HOME + '/MyDocs/.documents'):
-        file_dialog.set_current_folder(HOME + '/MyDocs/.documents')
-    else:
-        file_dialog.set_current_folder(HOME)
-
-    file_dialog.set_default_response(gtk.RESPONSE_CANCEL)
-
-    result = file_dialog.run()
-    if result == gtk.RESPONSE_OK:
-        namefile = file_dialog.get_filename()
-        if (action==gtk.FILE_CHOOSER_ACTION_SAVE):
-            namefile = file_dialog.get_filename()
-            namefile, extension = os.path.splitext(namefile)
-            namefile = namefile + "." + EXT
-
-    else:
-        namefile = None
-    file_dialog.destroy()
-
-    return namefile

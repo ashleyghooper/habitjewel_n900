@@ -1,6 +1,6 @@
-habitjewel (0.1.1-1) unstable; urgency=low
+habitjewel (0.1.2-1) unstable; urgency=low
 
- * Fixed display bugs
+ * Fixed rotation, graphical checkboxes, refactor, etc
 
 -- Ashley Hooper <ashleyghooper@gmail.com>  Mon, 25 Jul 2016 21:18:15 +1200
 
