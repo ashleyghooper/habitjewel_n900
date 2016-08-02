@@ -262,7 +262,7 @@ class MainWindow:
         menu.append(button)
 
         button = gtk.Button(_("Go to Date"))
-        button.connect("clicked", self.go_to_date)
+        button.connect("clicked", self.display_calendar)
         menu.append(button)
 
         button = gtk.Button(_("Delete"))
@@ -276,17 +276,42 @@ class MainWindow:
         menu.show_all()
         return menu
 
+
     def stats(self, widget):
         return
 
-    def go_to_date(self, widget):
-        return
+
+    def display_calendar(self, widget):
+        TODO: Increase size of calendar dates
+        TODO: Highlight days based on habit fulfillment
+        self.win = hildon.StackableWindow()
+        self.win.set_title('Go to Date')
+        self.win.get_screen().connect("size-changed", self.orientation_changed)
+        vbox_cal = gtk.VBox()
+        cal = gtk.Calendar()
+        cal.select_month(view_date.month, view_date.year)
+        cal.select_day(view_date.day)
+        vbox_cal.pack_start(cal) 
+        cal.connect("day_selected", self.calendar_date_selected)
+        self.win.add(vbox_cal)
+        self.win.show_all()
+
+
+    def calendar_date_selected(self, cal):
+        global view_date
+        year, month, day = cal.get_date()
+        view_date = datetime.date(year, month, day)
+        self.win.destroy()
+        self.redraw_habit_list(self)
+
 
     def remove_habits(self, widget):
         return
 
+
     def about(self, widget):
         return
+
 
     def home_screen(self):
         self.vbox_outer = gtk.VBox(False)
