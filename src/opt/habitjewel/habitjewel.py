@@ -282,8 +282,8 @@ class MainWindow:
 
 
     def display_calendar(self, widget):
-        TODO: Increase size of calendar dates
-        TODO: Highlight days based on habit fulfillment
+        #TODO: Increase size of calendar dates
+        #TODO: Highlight days based on habit fulfillment
         self.win = hildon.StackableWindow()
         self.win.set_title('Go to Date')
         self.win.get_screen().connect("size-changed", self.orientation_changed)
