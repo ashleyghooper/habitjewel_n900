@@ -320,7 +320,15 @@ class MainWindow:
 
 
     def about(self, widget):
-        return
+        st_win = hildon.StackableWindow()
+        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        vbox_about = gtk.VBox()
+        text = hildon.TextView()
+        text.set_placeholder("About page")
+        vbox_about.pack_start(text)
+        st_win.add(vbox_about)
+        st_win.set_title('About HabitJewel')
+        st_win.show_all()
 
 
     def home_screen(self):
