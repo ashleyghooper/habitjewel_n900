@@ -6,7 +6,7 @@
 current_path=`pwd`
 
 # set the project path
-local_project_path=/home/crash/src/python/n900/habitjewel/
+local_project_path=$HOME/src/python/n900/habitjewel/
 remote_project_path=/home/user/src/python/habitjewel/
 
 # change to the project path
