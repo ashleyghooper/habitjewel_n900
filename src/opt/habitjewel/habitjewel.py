@@ -77,21 +77,17 @@ log_file = config_dir + 'log.txt'
 
 
 # Detect if running locally or not
-runningpath = sys.path[0]
-
-if '/opt' in runningpath:
+running_path = sys.path[0]
+if running_path.startswith('/opt'):
     locally = False
 else:
     locally = True
 
-############### REMOVE
-locally = True
-##########################################
 if locally:
-    imgdir = 'pixmaps/'
+    img_dir = 'pixmaps/'
 else:
-    appdir = '/opt/habitjewel/'
-    imgdir = appdir + 'pixmaps/'
+    app_dir = '/opt/habitjewel/'
+    img_dir = app_dir + 'pixmaps/'
 
 
 
@@ -192,15 +188,17 @@ else:
     cursor.close()
 
 
-# Get today's date and use that as the date displayed on startup
-today = datetime.date.today()
-view_date = today
 
 
 class MainWindow:
 
     def __init__(self):
         gettext.install('habitjewel','/opt/habitjewel/share/locale')
+
+        # Get today's date and use that as the date displayed on startup
+        today = datetime.date.today()
+        self.view_date = today
+
         self.program = hildon.Program()
         self.program.__init__()
         gtk.set_application_name("Habitjewel")
@@ -277,20 +275,61 @@ class MainWindow:
         button.connect("clicked", self.about)
         menu.append(button)
 
+        menu.connect("event", self.event_catcher)
+
         menu.show_all()
         return menu
+
 
     def stats(self, widget):
         return
 
+
     def go_to_date(self, widget):
-        return
+        st_win = hildon.StackableWindow()
+        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        vbox_cal = gtk.VBox()
+        cal = self.get_calendar(self, self.view_date)
+        vbox_cal.pack_start(cal, True, True) 
+        st_win.add(vbox_cal)
+        st_win.set_title('Go to Date')
+        st_win.show_all()
+        cal.connect("day_selected", self.calendar_date_selected, st_win)
+
+
+    def get_calendar(self, widget, disp_date):
+        #TODO: Increase size of calendar dates
+        #TODO: Highlight days based on habit fulfillment
+        cal = gtk.Calendar()
+        cal.detail_height_rows = 20
+        cal.no_month_change = False
+        cal.select_month(disp_date.month, disp_date.year)
+        cal.select_day(disp_date.day)
+        return cal
+
+
+    def calendar_date_selected(self, cal, st_win):
+        year, month, day = cal.get_date()
+        self.view_date = datetime.date(year, month, day)
+        st_win.destroy()
+        self.redraw_habit_list(self)
+
 
     def remove_habits(self, widget):
         return
 
+
     def about(self, widget):
-        return
+        st_win = hildon.StackableWindow()
+        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        vbox_about = gtk.VBox()
+        text = hildon.TextView()
+        text.set_placeholder("About page")
+        vbox_about.pack_start(text)
+        st_win.add(vbox_about)
+        st_win.set_title('About HabitJewel')
+        st_win.show_all()
+
 
     def home_screen(self):
         self.vbox_outer = gtk.VBox(False)
@@ -359,7 +398,7 @@ class MainWindow:
 
 
     def prepare_habit_list(self, widget):
-        habit_list = habitjewel_utils.get_habit_list(conn, view_date)
+        habit_list = habitjewel_utils.get_habit_list(conn, self.view_date)
 
         for item in habit_list:
             lstore_iter = self.habit_list_model.append()
@@ -370,8 +409,7 @@ class MainWindow:
                     item['id'], \
                 TV_HABIT_LIST_DESC, \
                     '<b>' + item['title'] + '</b> ' + str(item['goal']) \
-                    + ' <i>' + item['by_when'] + '</i>  for ' \
-                    + str(item['points']) + ' pts', \
+                    + ' <i>' + item['by_when'] + '</i>', \
                 TV_HABIT_LIST_PCT_COMPLETE, \
                     item['pct_complete'], \
                 TV_HABIT_LIST_PIXBUF, \
@@ -389,7 +427,7 @@ class MainWindow:
         else:
             icon_filename = PIXBUF_FILE_UNKNOWN
 
-        return gtk.gdk.pixbuf_new_from_file(imgdir + icon_filename)
+        return gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
  
 
     def add_columns_to_habit_list(self, treeview):
@@ -444,7 +482,7 @@ class MainWindow:
         habitjewel_utils.set_fulfillment_status (conn, \
             model[iter][TV_HABIT_LIST_ID], \
             model[iter][TV_HABIT_LIST_INTVL_TYPE], \
-            view_date, \
+            self.view_date, \
             percent_complete \
         )
         model[iter][TV_HABIT_LIST_PIXBUF] = self.get_pixbuf_filename_for_status (percent_complete)
@@ -452,19 +490,17 @@ class MainWindow:
 
 
     def prev_day(self, widget):
-        global view_date
-        view_date = view_date - datetime.timedelta(days=1)
+        self.view_date = self.view_date - datetime.timedelta(days=1)
         self.redraw_habit_list(self)
 
 
     def next_day(self, widget):
-        global view_date
-        view_date = view_date + datetime.timedelta(days=1)
+        self.view_date = self.view_date + datetime.timedelta(days=1)
         self.redraw_habit_list(self)
 
 
     def get_date_label_text(self, widget):
-        date_disp = view_date.strftime("%a %d %B %Y")
+        date_disp = self.view_date.strftime("%a %d %B %Y")
         return date_disp
 
 
@@ -474,7 +510,8 @@ class MainWindow:
         self.habit_list_model.clear()
         self.prepare_habit_list(self)
         checkbox_col = self.habit_list_tv.get_column(2)
-        if (view_date <= today):
+        today = datetime.date.today()
+        if (self.view_date <= today):
             checkbox_col.set_visible(True)
         else:
             checkbox_col.set_visible(False)
@@ -555,6 +592,14 @@ class MainWindow:
             return False
         else:
             return True
+
+
+    def event_catcher(self, widget, event):
+        print "----------------------------------------------"
+        print "Widget: " + str(widget)
+        print str(event)
+        print str(event.type)
+        return False
 
 
     #FIXME: there's a bug that occurs with these steps:

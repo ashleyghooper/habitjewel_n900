@@ -20,15 +20,13 @@ import glob,os
 for fpath in glob.glob('*/*.py[c|o]'):
     os.remove(fpath)
  
-changes = '* Fixed rotation, graphical checkboxes, refactor, etc'
+changes = '* Fixed bug with pixmaps dir when in /optm'
  
 setup(name='habitjewel',
-      version='0.1.2',
+      version='0.1.3',
       license='GNU GPLv3',
-      description="Record and track your progress in achieving your daily habits.",
-      long_description="HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks.
-
-Ultimately it will keep track of accomplishment of the habits, award points, and allow some statistics and graphing.",
+      description='Record and track your progress in achieving your daily habits.',
+      long_description='HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks. Ultimately it will keep track of accomplishment of the habits, award points, and allow some statistics and graphing.',
       author='Ashley Hooper',
       author_email='ashleyghooper@gmail.com',
       maintainer=u'Ashley Hooper',
@@ -54,7 +52,7 @@ Ultimately it will keep track of accomplishment of the habits, award points, and
       cmdclass={'sdist_maemo': _sdist_maemo},
       options = { 'sdist_maemo':{
       'debian_package':'habitjewel',
-      'buildversion':'1',
+      'buildversion':'2',
       'depends':'python2.5, python-hildondesktop, hildon-desktop-python-loader',
       'conflicts':'',
       'XSBC_Bugtracker':'',
