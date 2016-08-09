@@ -259,6 +259,10 @@ class MainWindow:
         """
         menu = hildon.AppMenu()
 
+        button = gtk.Button(_("New Habit"))
+        button.connect("clicked", self.habit_edit_screen)
+        menu.append(button)
+
         button = gtk.Button(_("Stats"))
         button.connect("clicked", self.stats)
         menu.append(button)
@@ -523,25 +527,28 @@ class MainWindow:
 
 
     #TODO: Everything below here
-    def habit_edit_screen(self, widget, kind, habit_id):
-        print "kind = "
-        print kind
-        print "habit_id = "
-        print habit_id
-        if kind == 'edit':
-            titlewin = _('Editing habit')
-#            self.get_habit_data(habit_id)
+    def habit_edit_screen(self, widget, habit_id=None):
+        st_win = hildon.StackableWindow()
+        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        vbox = gtk.VBox()
+
+        if (not habit_id):
+            win_title = _('Add new habit')
         else:
-            titlewin = _('Creating new habit')
-#            self.initialize_vars()
+            win_title = _('Edit habit')
 
-        win = hildon.StackableWindow()
-        win.set_title(titlewin)
+        st_win.set_title(win_title)
+        st_win.show_all()
 
-        menu = self.make_edit_menu(kind)
-        win.set_app_menu(menu)
+        # Below goes after logic
+        # vbox_cal.pack_start(cal, True, True) 
+        # st_win.add(vbox_cal)
+        # st_win.show_all()
+        # cal.connect("day_selected", self.calendar_date_selected, st_win)
 
-        win.get_screen().connect("size-changed", self.orientation_changed)
+        # menu = self.make_edit_menu(kind)
+        # win.set_app_menu(menu)
+
 
         self.entitle = hildon.Entry(fhsize)
         self.entitle.set_placeholder(_("Title"))
@@ -592,6 +599,56 @@ class MainWindow:
             return False
         else:
             return True
+
+
+    def pressed(self, widget, event):
+        """Press-handler"""
+        self.lastPressEpoch = event.time
+        self.pressInProgress = True
+
+        self.dragStartX = event.x
+        self.dragStartY = event.y
+        #print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+
+        self.dragX = event.x
+        self.dragY = event.y
+
+        if not self.pressLengthTimer:
+            self.pressLengthTimer = gobject.timeout_add(50, self.checkStillPressed, \
+                  event.time, time.time(), event.x, event.y)
+        # check for double-click
+        if event.type == gdk._2BUTTON_PRESS:
+            self.doubleClick(event.x, event.y)
+
+
+    def checkStillPressed(self, pressStartEpoch, pressStartTime, startX, startY):
+        """check if a press is still in progress and report:
+        pressStart epoch - to differentiate presses
+        duration
+        start coordinates
+        currentCoordinates
+        if no press is in progress or another press already started, shut down the timer"""
+
+        # just to be sure, time out after 60 seconds
+        # - provided the released signal is always called, this timeout might not be
+        # necessary, but better be safe, than eat the whole battery if the timer is
+        # not terminated
+        dt = (time.time() - pressStartTime) * 1000
+        if dt > 60000:
+            print "DEBUG: long press timeout reached"
+            return False
+
+        if pressStartEpoch == self.lastPressEpoch and self.pressInProgress:
+            self.handleLongPress(pressStartEpoch, dt, startX, startY, \
+                    self.dragX, self.dragY)
+            return True
+        else: # the press ended or a new press is in progress -> stop the timer
+            return False
+
+
+    def handleLongPress(self, pressStartEpoch, msCurrentDuration, startX, startY, x, y):
+        """handle long press"""
+        # Can we somehow map the coords to the Gtk object that is clicked?
 
 
     def event_catcher(self, widget, event):
