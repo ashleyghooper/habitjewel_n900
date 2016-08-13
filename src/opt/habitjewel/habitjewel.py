@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.1'
+VERSION = '0.1.1'
 
 import datetime
 import gettext
@@ -218,6 +218,8 @@ class MainWindow:
         #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
         self.init_disp_orientation()
 
+        self.press_length_timer = None
+
         self.fontsize = 15
 
         menu = self.make_menu()
@@ -225,6 +227,8 @@ class MainWindow:
 
         self.container = self.home_screen()
         self.top_window.add(self.container)
+
+        self.set_habit_list_item_context_menu (self)
 
         self.top_window.show_all()
 
@@ -384,6 +388,7 @@ class MainWindow:
         self.habit_list_model = self.create_habit_list_model(self)
         self.habit_list_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
+        self.habit_list_tv.connect("button-press-event", self.row_pressed)
 
         self.pan_area.add(self.habit_list_tv)
 
@@ -402,7 +407,7 @@ class MainWindow:
 
 
     def prepare_habit_list(self, widget):
-        habit_list = habitjewel_utils.get_habit_list(conn, self.view_date)
+        habit_list = habitjewel_utils.get_habits_list(conn, self.view_date)
 
         for item in habit_list:
             lstore_iter = self.habit_list_model.append()
@@ -527,7 +532,15 @@ class MainWindow:
 
 
     #TODO: Everything below here
-    def habit_edit_screen(self, widget, habit_id=None):
+    #def habit_edit_screen(self, widget, habit_id=None):
+    def habit_edit_screen(self, widget, var3, var4):
+        print "var3 = " + str(var3)
+        print "var4 = " + str(var4)
+
+        title = var4.get_title()
+        print "title = " + title
+        tv = var4.get_tree_view()
+
         st_win = hildon.StackableWindow()
         st_win.get_screen().connect("size-changed", self.orientation_changed)
         vbox = gtk.VBox()
@@ -536,9 +549,16 @@ class MainWindow:
             win_title = _('Add new habit')
         else:
             win_title = _('Edit habit')
+            habit = habitjewel_utils.get_habit_details(conn, habit_id)
+            measures = habitjewel_utils.get_measures_list(conn)
+            categories = habitjewel_utils.get_categories_list(conn)
+
+        # Draw new/edit habit form 
 
         st_win.set_title(win_title)
         st_win.show_all()
+
+        
 
         # Below goes after logic
         # vbox_cal.pack_start(cal, True, True) 
@@ -601,6 +621,70 @@ class MainWindow:
             return True
 
 
+    def row_pressed(self, widget, event):
+        """Press-handler"""
+        print str(widget)
+        print str(event)
+        self.last_press_epoch = event.time
+        self.press_in_progress = True
+
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+
+        self.drag_x = event.x
+        self.drag_y = event.y
+
+        if not self.press_length_timer:
+            self.press_length_timer = gobject.timeout_add(50, self.check_row_still_pressed, \
+                event.time, time.time(), event.x, event.y)
+
+
+    def check_row_still_pressed(self, press_start_epoch, press_start_time, start_x, start_y):
+        """check if a press is still in progress and report:
+        press start epoch - to differentiate presses
+        duration
+        start coordinates
+        current coordinates
+        if no press is in progress or another press already started, shut down the timer"""
+
+        # just to be sure, time out after 60 seconds
+        # - provided the released signal is always called, this timeout might not be
+        # necessary, but better be safe, than eat the whole battery if the timer is
+        # not terminated
+        dur = (time.time() - press_start_time) * 1000
+        if dur > 60000:
+            print "DEBUG: long press timeout reached"
+            return False
+
+        if press_start_epoch == self.last_press_epoch and self.press_in_progress:
+            self.handle_row_long_press(press_start_epoch, dur, start_x, start_y, \
+                    self.drag_x, self.drag_y)
+            return True
+        else: # the press ended or a new press is in progress -> stop the timer
+            return False
+
+
+    def handle_row_long_press(self, press_start_epoch, ms_current_duration, start_x, start_y, x, y):
+        """handle long press"""
+        # Can we somehow map the coords to the Gtk object that is clicked?
+        path_info = self.habit_list_tv.get_path_at_pos(x, y)
+        if path_info is not None:
+            path, col, cell_x, cell_y = path_info
+            self.habit_list_tv.grab_focus()
+            self.habit_list_tv.set_cursor(path, col, 0)
+            self.habit_list_menu.popup (None, None, None, 1, press_start_epoch)
+
+
+    def set_habit_list_item_context_menu (self, widget):
+        """do"""
+        menu = gtk.Menu()
+        menu_item = gtk.MenuItem(_("Edit"))
+        menu.append(menu_item)
+        menu_item.show()
+        self.habit_list_menu = menu
+
+
     def pressed(self, widget, event):
         """Press-handler"""
         self.lastPressEpoch = event.time
@@ -608,7 +692,7 @@ class MainWindow:
 
         self.dragStartX = event.x
         self.dragStartY = event.y
-        #print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
 
         self.dragX = event.x
         self.dragY = event.y

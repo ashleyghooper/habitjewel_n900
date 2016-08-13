@@ -9,9 +9,11 @@ horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 
 ##Return the titles and ids of the all recipes in the database
 ##return a list similar to [(1, 'recipe1'), (2, 'recipe2')]
-def get_habit_list(conn, view_date):
+def get_habits_list(conn, view_date):
     view_day_abbrev = view_date.strftime("%a")
-    rows = []
+
+    habits_list=[]
+
     for row in conn.execute(
         """
         SELECT DISTINCT h.id, h.title, unit, plural, target,
@@ -52,33 +54,98 @@ def get_habit_list(conn, view_date):
                 )
             ORDER BY priority, h.title
         """, [view_date, view_date, view_date, view_date, view_date, view_date, \
-            '%' + view_day_abbrev + '%', view_date]):
-        rows.append(row)
+            '%' + view_day_abbrev + '%', view_date]
+    ):
 
-    habit_list=[]
-
-    for i in range(len(rows)):
-        row = rows[i]
         habit = { \
             'id':               row[0], \
             'title':            row[1], \
-        	'unit':	            row[2], \
-        	'plural':   	    row[3], \
-        	'target':	        row[4], \
-        	'goal':	            row[5], \
-        	'by_when':	        row[6], \
-        	'interval_type':	row[7], \
-        	'interval':	        row[8], \
-        	'points':	        row[9], \
-        	'pct_complete':	    row[10], \
-        	'score':	        row[11], \
-        	'priority':	        row[12], \
-        	'cat_id':	        row[13], \
-        	'cat_title':	    row[14] \
+            'unit':             row[2], \
+            'plural':           row[3], \
+            'target':           row[4], \
+            'goal':             row[5], \
+            'by_when':          row[6], \
+            'interval_type':    row[7], \
+            'interval':         row[8], \
+            'points':           row[9], \
+            'pct_complete':     row[10], \
+            'score':            row[11], \
+            'priority':         row[12], \
+            'cat_id':           row[13], \
+            'cat_title':        row[14] \
         }
-        habit_list.append(habit)
+        habits_list.append(habit)
 
-    return habit_list
+    return habits_list
+
+
+def get_measures_list(conn):
+
+    measures_list=[]
+
+    for row in conn.execute(
+        """
+        SELECT DISTINCT id, unit, plural, desc, created_date, deleted_date
+            FROM measures
+            ORDER BY unit
+        """
+    ):
+
+        measure = { \
+            'id':               row[0], \
+            'unit':             row[1], \
+            'plural':           row[2], \
+            'desc':             row[3], \
+            'created_date':     row[4], \
+            'deleted_date':     row[5]
+        }
+        measures_list.append(measure)
+
+    return measures_list
+
+
+def get_categories_list(conn):
+
+    categories_list=[]
+
+    for row in conn.execute(
+        """
+        SELECT DISTINCT id, title, created_date, deleted_date
+            FROM categories
+            ORDER BY title
+        """
+    ):
+
+        category = { \
+            'id':               row[0], \
+            'title':            row[1], \
+            'created_date':     row[2], \
+            'deleted_date':     row[3]
+        }
+        categories_list.append(category)
+
+    return categories_list
+
+
+def get_habit_details(conn, habit_id):
+    habit = conn.execute(
+        """
+        SELECT DISTINCT h.id, h.title, unit, plural, target,
+            target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
+            interval_type,
+            interval,
+            h.category_id, c.title,
+            m.id, m.desc, m.unit, m.plural,
+            FROM habits h
+                JOIN measures m
+                    ON m.id = h.measure_id
+                JOIN categories c
+                    ON c.id = h.category_id
+            WHERE habit_id = ?
+        """, [habit_id]
+    )
+    
+    return habit
 
 
 def set_fulfillment_status (conn, habit_id, interval_type, view_date, percent):
