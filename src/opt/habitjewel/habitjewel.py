@@ -49,6 +49,7 @@ BTN_SIZE_FINGER = gtk.HILDON_SIZE_FINGER_HEIGHT
 BTN_SIZE_THUMB  = gtk.HILDON_SIZE_THUMB_HEIGHT
 WRAP_WIDTH_LANDSCAPE = 700
 WRAP_WIDTH_PORTRAIT = 380
+CLICK_DRAG_THRESHOLD = 1024
 
 # Unused?
 WIN_PROG_IND = hildon.hildon_gtk_window_set_progress_indicator
@@ -103,9 +104,20 @@ else:
     print 'creating new database'
     cursor.execute(
         """
+        CREATE TABLE goals (id INTEGER PRIMARY KEY, title TEXT,
+            priority INTEGER, category_id INTEGER, due_date DATE,
+            points_threshold INTEGER, created_date DATE, deleted_date DATE)
+        """)
+    cursor.execute(
+        """
+        CREATE TABLE goal_habits (id INTEGER PRIMARY KEY,
+            goal_id INTEGER, habit_id INTEGER)
+        """)
+    cursor.execute(
+        """
         CREATE TABLE habits (id INTEGER PRIMARY KEY, title TEXT,
             measure_id INTEGER, target INTEGER,
-            priority INTEGER, category_id INTEGER, interval_type TEXT, interval TEXT,
+            priority INTEGER, interval_type TEXT, interval TEXT,
             points INTEGER, created_date DATE, deleted_date DATE)
         """)
     cursor.execute(
@@ -149,39 +161,39 @@ else:
         """, ['word', 'words', 'words'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 1, 'Day', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 100, CURRENT_DATE)
+            VALUES (?, 1, 30, 1, 'Day', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 100, CURRENT_DATE)
         """, ['Meditate'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 3, 'Week', '1', 100, CURRENT_DATE)
+            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study French'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 3, 'Week', '1', 100, CURRENT_DATE)
+            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study Spanish'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 3, 'Week', '1', 100, CURRENT_DATE)
+            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study software development'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 2, 2, 3, 2, 'Day', 'Mon,Wed,Fri,Sun', 100, CURRENT_DATE)
+            VALUES (?, 2, 2, 3, 'Day', 'Mon,Wed,Fri,Sun', 100, CURRENT_DATE)
         """, ['Walk'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority, category_id,
+        INSERT INTO habits (title, measure_id, target, priority,
             interval_type, interval, points, created_date)
-            VALUES (?, 2, 50, 2, 2, 'Week', '1', 100, CURRENT_DATE)
+            VALUES (?, 2, 50, 2, 'Week', '1', 100, CURRENT_DATE)
         """, ['Cycle'])
     
     conn.commit()
@@ -218,7 +230,18 @@ class MainWindow:
         #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
         self.init_disp_orientation()
 
+        # press length timing
+        self.last_press_epoch = 0
+        self.press_in_progress = False
         self.press_length_timer = None
+
+        # Menus
+        self.habit_list_menu_visible = False
+
+        # dragging
+        self.dragX = 0
+        self.dragY = 0
+
 
         self.fontsize = 15
 
@@ -344,6 +367,7 @@ class MainWindow:
         self.pan_area = hildon.PannableArea()
 
         self.habit_list_tv = hildon.GtkTreeView(UI_NORMAL)
+        self.habit_list_tv.set_name("HabitListTreeview")
         self.areaview = self.habit_list_tv.get_action_area_box()
 
         # HBox for 'prev' button
@@ -388,7 +412,8 @@ class MainWindow:
         self.habit_list_model = self.create_habit_list_model(self)
         self.habit_list_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
-        self.habit_list_tv.connect("button-press-event", self.row_pressed)
+        self.habit_list_tv.connect("button-press-event", self.pressed)
+        self.habit_list_tv.connect("button-release-event", self.released)
 
         self.pan_area.add(self.habit_list_tv)
 
@@ -417,7 +442,7 @@ class MainWindow:
                 TV_HABIT_LIST_ID, \
                     item['id'], \
                 TV_HABIT_LIST_DESC, \
-                    '<b>' + item['title'] + '</b> ' + str(item['goal']) \
+                    '<b>' + item['title'] + '</b> ' + str(item['target_desc']) \
                     + ' <i>' + item['by_when'] + '</i>', \
                 TV_HABIT_LIST_PCT_COMPLETE, \
                     item['pct_complete'], \
@@ -463,11 +488,6 @@ class MainWindow:
         column = gtk.TreeViewColumn('Percent complete', gtk.CellRendererText(), text=TV_HABIT_LIST_PCT_COMPLETE)
         column.set_visible(False)
         treeview.append_column(column)
-
-        # column for category
-        #column = gtk.TreeViewColumn('Category', gtk.CellRendererText(), text=2)
-        #column.set_visible(False)
-        #treeview.append_column(column)
 
         # column for interval type
         #column = gtk.TreeViewColumn('Interval type', gtk.CellRendererText(), text=4)
@@ -621,7 +641,7 @@ class MainWindow:
             return True
 
 
-    def row_pressed(self, widget, event):
+    def pressed(self, widget, event):
         """Press-handler"""
         print str(widget)
         print str(event)
@@ -636,44 +656,88 @@ class MainWindow:
         self.drag_y = event.y
 
         if not self.press_length_timer:
-            self.press_length_timer = gobject.timeout_add(50, self.check_row_still_pressed, \
-                event.time, time.time(), event.x, event.y)
+            # 50 ms constitutes a long press
+            self.press_length_timer = gobject.timeout_add(50, self.check_still_pressed, \
+                widget, event, event.button, event.time, time.time(), event.x, event.y)
 
 
-    def check_row_still_pressed(self, press_start_epoch, press_start_time, start_x, start_y):
+    def released(self, widget, event):
+        print("Released button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+        self.press_in_progress = False
+        ms_duration = event.time - self.last_press_epoch
+        
+        dx = event.x - self.drag_start_x
+        dy = event.y - self.drag_start_y
+
+        #dist_sq = dx * dx + dy * dy
+        #if dist_sq < CLICK_DRAG_THRESHOLD:
+        #    self.click(event.x, event.y, msDuration)
+
+        self.habit_list_menu.popdown()
+        self.habit_list_menu_visible = False
+
+
+    def check_still_pressed(self, widget, event, button, press_start_epoch, \
+            press_start_time, start_x, start_y):
         """check if a press is still in progress and report:
         press start epoch - to differentiate presses
         duration
         start coordinates
         current coordinates
         if no press is in progress or another press already started, shut down the timer"""
+        sys.stdout.write('in check_still_pressed()')
 
         # just to be sure, time out after 60 seconds
         # - provided the released signal is always called, this timeout might not be
         # necessary, but better be safe, than eat the whole battery if the timer is
         # not terminated
         dur = (time.time() - press_start_time) * 1000
-        if dur > 60000:
+        if dur > 10000:
             print "DEBUG: long press timeout reached"
             return False
-
+        print "press_start_epoch = " + str(press_start_epoch)
+        print "self.last_press_epoch = " + str(self.last_press_epoch)
+        print "self.press_in_progress = " + str(self.press_in_progress)
         if press_start_epoch == self.last_press_epoch and self.press_in_progress:
-            self.handle_row_long_press(press_start_epoch, dur, start_x, start_y, \
-                    self.drag_x, self.drag_y)
+            self.handle_long_press(widget, event, button, press_start_epoch, dur, \
+                    start_x, start_y, self.drag_x, self.drag_y)
+            sys.stdout.write('y')
             return True
         else: # the press ended or a new press is in progress -> stop the timer
+            self.press_length_timer = None
+            print "STOP TIMER"
+            print " "
+            #released(widget, event)
             return False
 
 
-    def handle_row_long_press(self, press_start_epoch, ms_current_duration, start_x, start_y, x, y):
+    def handle_long_press(self, widget, event, button, press_start_epoch, \
+            ms_current_duration, start_x, start_y, x, y):
         """handle long press"""
-        # Can we somehow map the coords to the Gtk object that is clicked?
-        path_info = self.habit_list_tv.get_path_at_pos(x, y)
-        if path_info is not None:
-            path, col, cell_x, cell_y = path_info
-            self.habit_list_tv.grab_focus()
-            self.habit_list_tv.set_cursor(path, col, 0)
-            self.habit_list_menu.popup (None, None, None, 1, press_start_epoch)
+        # find out which widget
+        widget_name = widget.get_name()
+        self.press_in_progress = False
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        print "widget name = " + widget_name
+        if widget_name == 'HabitListTreeview':
+            self.long_press_habit_list_item(event, button, press_start_epoch, \
+                    ms_current_duration, start_x, start_y, x, y)
+
+
+    def long_press_habit_list_item(self, event, button, press_start_epoch, \
+            ms_current_duration, start_x, start_y, x, y):
+        if not self.habit_list_menu_visible:
+            sys.stdout.write('q')
+            path_info = self.habit_list_tv.get_path_at_pos(int(x), int(y))
+            if path_info is not None:
+                sys.stdout.write('r')
+                path, col, cell_x, cell_y = path_info
+                self.habit_list_tv.set_cursor(path, col, 0)
+                self.habit_list_tv.grab_focus()
+                self.habit_list_menu.popup (None, None, None, button, press_start_epoch)
+                self.habit_list_menu_visible = True
+        sys.stdout.flush()
 
 
     def set_habit_list_item_context_menu (self, widget):
@@ -682,57 +746,16 @@ class MainWindow:
         menu_item = gtk.MenuItem(_("Edit"))
         menu.append(menu_item)
         menu_item.show()
+        menu_item.connect("activate", self.edit_habit, widget)
         self.habit_list_menu = menu
 
 
-    def pressed(self, widget, event):
-        """Press-handler"""
-        self.lastPressEpoch = event.time
-        self.pressInProgress = True
-
-        self.dragStartX = event.x
-        self.dragStartY = event.y
-        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
-
-        self.dragX = event.x
-        self.dragY = event.y
-
-        if not self.pressLengthTimer:
-            self.pressLengthTimer = gobject.timeout_add(50, self.checkStillPressed, \
-                  event.time, time.time(), event.x, event.y)
-        # check for double-click
-        if event.type == gdk._2BUTTON_PRESS:
-            self.doubleClick(event.x, event.y)
-
-
-    def checkStillPressed(self, pressStartEpoch, pressStartTime, startX, startY):
-        """check if a press is still in progress and report:
-        pressStart epoch - to differentiate presses
-        duration
-        start coordinates
-        currentCoordinates
-        if no press is in progress or another press already started, shut down the timer"""
-
-        # just to be sure, time out after 60 seconds
-        # - provided the released signal is always called, this timeout might not be
-        # necessary, but better be safe, than eat the whole battery if the timer is
-        # not terminated
-        dt = (time.time() - pressStartTime) * 1000
-        if dt > 60000:
-            print "DEBUG: long press timeout reached"
-            return False
-
-        if pressStartEpoch == self.lastPressEpoch and self.pressInProgress:
-            self.handleLongPress(pressStartEpoch, dt, startX, startY, \
-                    self.dragX, self.dragY)
-            return True
-        else: # the press ended or a new press is in progress -> stop the timer
-            return False
-
-
-    def handleLongPress(self, pressStartEpoch, msCurrentDuration, startX, startY, x, y):
-        """handle long press"""
-        # Can we somehow map the coords to the Gtk object that is clicked?
+    def edit_habit (self, menu_item, widget):
+        (path, column) = self.habit_list_tv.get_cursor()
+        print str(path)
+        print str(column)
+        print str(menu_item)
+        self.press_in_progress = False
 
 
     def event_catcher(self, widget, event):

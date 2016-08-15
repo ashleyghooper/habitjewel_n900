@@ -17,7 +17,7 @@ def get_habits_list(conn, view_date):
     for row in conn.execute(
         """
         SELECT DISTINCT h.id, h.title, unit, plural, target,
-            target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
+            target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS target_desc,
             CASE interval_type
                 WHEN 'Day' THEN 'today'
                 ELSE 'this week'
@@ -32,12 +32,10 @@ def get_habits_list(conn, view_date):
                 WHEN 'Day' THEN IFNULL(points * hsd.percent_complete, 0)
                 ELSE IFNULL(points * hsw.percent_complete, 0)
             END AS score,
-            priority, c.id, c.title
+            priority
             FROM habits h
                 JOIN measures m
                     ON m.id = h.measure_id
-                JOIN categories c
-                    ON c.id = h.category_id
                 LEFT JOIN history hsd
                     ON hsd.habit_id = h.id
                          AND hsd.date = ?
@@ -63,16 +61,14 @@ def get_habits_list(conn, view_date):
             'unit':             row[2], \
             'plural':           row[3], \
             'target':           row[4], \
-            'goal':             row[5], \
+            'target_desc':      row[5], \
             'by_when':          row[6], \
             'interval_type':    row[7], \
             'interval':         row[8], \
             'points':           row[9], \
             'pct_complete':     row[10], \
             'score':            row[11], \
-            'priority':         row[12], \
-            'cat_id':           row[13], \
-            'cat_title':        row[14] \
+            'priority':         row[12] \
         }
         habits_list.append(habit)
 
@@ -134,13 +130,10 @@ def get_habit_details(conn, habit_id):
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
             interval_type,
             interval,
-            h.category_id, c.title,
             m.id, m.desc, m.unit, m.plural,
             FROM habits h
                 JOIN measures m
                     ON m.id = h.measure_id
-                JOIN categories c
-                    ON c.id = h.category_id
             WHERE habit_id = ?
         """, [habit_id]
     )
