@@ -76,6 +76,8 @@ config_dir = home + '/.habitjewel/'
 db_file = config_dir + 'database'
 log_file = config_dir + 'log.txt'
 
+i = 0
+
 
 # Detect if running locally or not
 running_path = sys.path[0]
@@ -642,9 +644,57 @@ class MainWindow:
 
 
     def pressed(self, widget, event):
+        print "in pressed()"
+        self.press_in_progress = True
+        self.last_press_epoch = event.time
+
+        self.drag_start_x = event.x
+        self.drag_start_y = event.y
+        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+
+        self.drag_x = event.x
+        self.drag_y = event.y
+
+        self.press_length_timer = gobject.timeout_add(100, self.check_still_pressed, \
+            widget, event, event.button, event.time, time.time(), event.x, event.y)
+
+        
+    def released(self, widget, event):
+        print "in released()"
+        self.press_in_progress = False
+        
+
+    def check_still_pressed(self, widget, event, button, press_start_epoch, \
+            press_start_time, start_x, start_y):
+        print "in check_still_pressed()"
+
+        dur = (time.time() - press_start_time) * 1000
+        if dur > 10000:
+            print "DEBUG: long press timeout reached"
+            return False
+
+        if press_start_epoch == self.last_press_epoch and self.press_in_progress:
+            if dur < 500:
+                self.handle_long_press(widget, event, button, press_start_epoch, dur, \
+                    start_x, start_y, self.drag_x, self.drag_y)
+                return True
+
+        return False
+#            else:
+#        else: # the press ended or a new press is in progress -> stop the timer
+#            return False
+#            self.released(widget, event, button, press_start_epoch, \
+#                    press_start_time, start_x, start_y)
+
+
+    def xpressed(self, widget, event):
+        global i
         """Press-handler"""
-        print str(widget)
-        print str(event)
+        i += 1
+        for h in range(i):
+            sys.stdout.write("*")
+            sys.stdout.flush()
+        print "in pressed() - widget = " + str(widget) + ", event = " + str(event)
         self.last_press_epoch = event.time
         self.press_in_progress = True
 
@@ -657,17 +707,21 @@ class MainWindow:
 
         if not self.press_length_timer:
             # 50 ms constitutes a long press
-            self.press_length_timer = gobject.timeout_add(50, self.check_still_pressed, \
+            self.press_length_timer = gobject.timeout_add(100, self.check_still_pressed, \
                 widget, event, event.button, event.time, time.time(), event.x, event.y)
+        else:
+            print "self.press_length_timer not False... - no setting timeout"
 
 
-    def released(self, widget, event):
-        print("Released button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
+    def xreleased(self, widget, event, button, press_start_epoch, \
+            press_start_time, start_x, start_y):
+        print("Released button %d at %1.0f, %1.0f" % (button, start_x, start_y))
+        self.press_length_timer = False
         self.press_in_progress = False
-        ms_duration = event.time - self.last_press_epoch
+        ms_duration = press_start_epoch - self.last_press_epoch
         
-        dx = event.x - self.drag_start_x
-        dy = event.y - self.drag_start_y
+        dx = start_x - self.drag_start_x
+        dy = start_y - self.drag_start_y
 
         #dist_sq = dx * dx + dy * dy
         #if dist_sq < CLICK_DRAG_THRESHOLD:
@@ -677,7 +731,7 @@ class MainWindow:
         self.habit_list_menu_visible = False
 
 
-    def check_still_pressed(self, widget, event, button, press_start_epoch, \
+    def xcheck_still_pressed(self, widget, event, button, press_start_epoch, \
             press_start_time, start_x, start_y):
         """check if a press is still in progress and report:
         press start epoch - to differentiate presses
@@ -685,9 +739,9 @@ class MainWindow:
         start coordinates
         current coordinates
         if no press is in progress or another press already started, shut down the timer"""
-        sys.stdout.write('in check_still_pressed()')
+        print "in check_still_pressed()"
 
-        # just to be sure, time out after 60 seconds
+        # just to be sure, time out after 10 seconds
         # - provided the released signal is always called, this timeout might not be
         # necessary, but better be safe, than eat the whole battery if the timer is
         # not terminated
@@ -701,13 +755,14 @@ class MainWindow:
         if press_start_epoch == self.last_press_epoch and self.press_in_progress:
             self.handle_long_press(widget, event, button, press_start_epoch, dur, \
                     start_x, start_y, self.drag_x, self.drag_y)
-            sys.stdout.write('y')
             return True
         else: # the press ended or a new press is in progress -> stop the timer
             self.press_length_timer = None
             print "STOP TIMER"
             print " "
-            #released(widget, event)
+            # self.released(widget, event)
+            self.released(widget, event, button, press_start_epoch, \
+                    press_start_time, start_x, start_y)
             return False
 
 
@@ -716,10 +771,8 @@ class MainWindow:
         """handle long press"""
         # find out which widget
         widget_name = widget.get_name()
-        self.press_in_progress = False
-        sys.stdout.write('.')
-        sys.stdout.flush()
-        print "widget name = " + widget_name
+        #self.press_in_progress = False
+        print "in handle_long_press() for widget name = " + widget_name
         if widget_name == 'HabitListTreeview':
             self.long_press_habit_list_item(event, button, press_start_epoch, \
                     ms_current_duration, start_x, start_y, x, y)
@@ -727,17 +780,17 @@ class MainWindow:
 
     def long_press_habit_list_item(self, event, button, press_start_epoch, \
             ms_current_duration, start_x, start_y, x, y):
+        print "in long_press_habit_list_item()"
         if not self.habit_list_menu_visible:
-            sys.stdout.write('q')
+            print "...not self.habit_list_menu_visible"
             path_info = self.habit_list_tv.get_path_at_pos(int(x), int(y))
             if path_info is not None:
-                sys.stdout.write('r')
+                print "...path_info not none"
                 path, col, cell_x, cell_y = path_info
                 self.habit_list_tv.set_cursor(path, col, 0)
                 self.habit_list_tv.grab_focus()
                 self.habit_list_menu.popup (None, None, None, button, press_start_epoch)
                 self.habit_list_menu_visible = True
-        sys.stdout.flush()
 
 
     def set_habit_list_item_context_menu (self, widget):
