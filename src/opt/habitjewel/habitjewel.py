@@ -53,7 +53,7 @@ CLICK_DRAG_THRESHOLD = 1024
 
 # Unused?
 WIN_PROG_IND = hildon.hildon_gtk_window_set_progress_indicator
-OSSO_CONTEXT = osso.Context("org.maemo.habitjewel", VERSION, False)
+OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 
 
 # Program constants
@@ -71,7 +71,7 @@ PIXBUF_FILE_UNKNOWN     = "checkbox_unchecked.png"
 
 
 # Initialisation
-home = os.path.expanduser("~")
+home = os.path.expanduser('~')
 config_dir = home + '/.habitjewel/'
 db_file = config_dir + 'database'
 log_file = config_dir + 'log.txt'
@@ -215,35 +215,22 @@ class MainWindow:
 
         self.program = hildon.Program()
         self.program.__init__()
-        gtk.set_application_name("Habitjewel")
+        gtk.set_application_name('Habitjewel')
 
         self.top_window = hildon.StackableWindow()
-        self.top_window.set_title(_("HabitJewel"))
+        self.top_window.set_title(_('HabitJewel'))
 
         # N900-specific
         self.osso_app_name = 'habitjewel'
 
         self.rotation_obj = self.init_autorotation()
 
-        self.top_window.connect("destroy", gtk.main_quit)
-        self.top_window.get_screen().connect("size-changed", self.orientation_changed)
+        self.top_window.connect('destroy', gtk.main_quit)
+        self.top_window.get_screen().connect('size-changed', self.orientation_changed)
         self.program.add_window(self.top_window)
 
         #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
         self.init_disp_orientation()
-
-        # press length timing
-        self.last_press_epoch = 0
-        self.press_in_progress = False
-        self.press_length_timer = None
-
-        # Menus
-        self.habit_list_menu_visible = False
-
-        # dragging
-        self.dragX = 0
-        self.dragY = 0
-
 
         self.fontsize = 15
 
@@ -252,8 +239,6 @@ class MainWindow:
 
         self.container = self.home_screen()
         self.top_window.add(self.container)
-
-        self.set_habit_list_item_context_menu (self)
 
         self.top_window.show_all()
 
@@ -288,27 +273,27 @@ class MainWindow:
         """
         menu = hildon.AppMenu()
 
-        button = gtk.Button(_("New Habit"))
-        button.connect("clicked", self.habit_edit_screen)
+        button = gtk.Button(_('New Habit'))
+        button.connect('clicked', self.habit_edit_screen)
         menu.append(button)
 
-        button = gtk.Button(_("Stats"))
-        button.connect("clicked", self.stats)
+        button = gtk.Button(_('Stats'))
+        button.connect('clicked', self.stats)
         menu.append(button)
 
-        button = gtk.Button(_("Go to Date"))
-        button.connect("clicked", self.go_to_date)
+        button = gtk.Button(_('Go to Date'))
+        button.connect('clicked', self.go_to_date)
         menu.append(button)
 
-        button = gtk.Button(_("Delete"))
-        button.connect("clicked", self.remove_habits)
+        button = gtk.Button(_('Delete'))
+        button.connect('clicked', self.remove_habits)
         menu.append(button)
 
-        button = gtk.Button(_("About"))
-        button.connect("clicked", self.about)
+        button = gtk.Button(_('About'))
+        button.connect('clicked', self.about)
         menu.append(button)
 
-        menu.connect("event", self.event_catcher)
+        menu.connect('event', self.event_catcher)
 
         menu.show_all()
         return menu
@@ -320,14 +305,14 @@ class MainWindow:
 
     def go_to_date(self, widget):
         st_win = hildon.StackableWindow()
-        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox_cal = gtk.VBox()
         cal = self.get_calendar(self, self.view_date)
         vbox_cal.pack_start(cal, True, True) 
         st_win.add(vbox_cal)
         st_win.set_title('Go to Date')
         st_win.show_all()
-        cal.connect("day_selected", self.calendar_date_selected, st_win)
+        cal.connect('day_selected', self.calendar_date_selected, st_win)
 
 
     def get_calendar(self, widget, disp_date):
@@ -354,10 +339,10 @@ class MainWindow:
 
     def about(self, widget):
         st_win = hildon.StackableWindow()
-        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox_about = gtk.VBox()
         text = hildon.TextView()
-        text.set_placeholder("About page")
+        text.set_placeholder('About page')
         vbox_about.pack_start(text)
         st_win.add(vbox_about)
         st_win.set_title('About HabitJewel')
@@ -369,21 +354,21 @@ class MainWindow:
         self.pan_area = hildon.PannableArea()
 
         self.habit_list_tv = hildon.GtkTreeView(UI_NORMAL)
-        self.habit_list_tv.set_name("HabitListTreeview")
+        self.habit_list_tv.set_name('HabitListTreeview')
         self.areaview = self.habit_list_tv.get_action_area_box()
 
         # HBox for 'prev' button
         self.hbox_prev = gtk.HBox()
-        self.img_prev = gtk.image_new_from_icon_name("general_back", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.img_prev = gtk.image_new_from_icon_name('general_back', gtk.ICON_SIZE_SMALL_TOOLBAR)
         self.hbox_prev.pack_start(self.img_prev)
         # 'Prev' button
         self.button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
-        self.button_prev.connect("clicked", self.prev_day)
+        self.button_prev.connect('clicked', self.prev_day)
         self.button_prev.add(self.hbox_prev)
 
         # HBox for date display
         self.hbox_date = gtk.HBox()
-        self.img_date = gtk.image_new_from_icon_name("general_calendar", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.img_date = gtk.image_new_from_icon_name('general_calendar', gtk.ICON_SIZE_SMALL_TOOLBAR)
         self.hbox_date.pack_start(self.img_date)
         label_text = self.get_date_label_text(self)
         self.date_label = gtk.Label(label_text)
@@ -391,11 +376,11 @@ class MainWindow:
 
         # HBox for 'next' button
         self.hbox_next = gtk.HBox()
-        self.img_next = gtk.image_new_from_icon_name("general_forward", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        self.img_next = gtk.image_new_from_icon_name('general_forward', gtk.ICON_SIZE_SMALL_TOOLBAR)
         self.hbox_next.pack_start(self.img_next)
         # 'Next' button
         self.button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
-        self.button_next.connect("clicked", self.next_day)
+        self.button_next.connect('clicked', self.next_day)
         self.button_next.add(self.hbox_next)
 
         self.vbox_nav = gtk.VBox(False)
@@ -414,8 +399,18 @@ class MainWindow:
         self.habit_list_model = self.create_habit_list_model(self)
         self.habit_list_tv.set_model(self.habit_list_model)
         self.prepare_habit_list(self)
-        self.habit_list_tv.connect("button-press-event", self.pressed)
-        self.habit_list_tv.connect("button-release-event", self.released)
+
+        self.habit_list_tv.connect('button-press-event', self.on_habit_list_button_press)
+
+        # "Long press" context menu
+        self.habit_list_menu = gtk.Menu()
+        # "Emulate" hildon_gtk_menu_new
+        self.habit_list_menu.set_name('hildon-context-sensitive-menu')
+        menu_item = gtk.MenuItem(_('Edit'))
+        self.habit_list_menu.append(menu_item)
+        menu_item.connect('activate', self.edit_habit, self.habit_list_tv)
+        self.habit_list_menu.show_all()
+        self.habit_list_tv.tap_and_hold_setup(self.habit_list_menu)
 
         self.pan_area.add(self.habit_list_tv)
 
@@ -425,18 +420,28 @@ class MainWindow:
         return self.vbox_outer
 
 
+    def on_habit_list_button_press(self, widget, event):
+        result = self.habit_list_tv.get_path_at_pos(int(event.x), int(event.y))
+        if result is not None:
+            path, column, x, y = result
+            model = self.habit_list_tv.get_model()
+            index = model.get_value(model.get_iter(path), TV_HABIT_LIST_ID) - 1
+            self.touched_habit = self.habit_list[index]
+        else:
+            self.touched_habit = None
+
+
     def create_habit_list_model(self, widget):
         lstore = gtk.ListStore(int, str, int, gtk.gdk.Pixbuf, str)
         # add columns to the tree view
         self.add_columns_to_habit_list(self.habit_list_tv)
-
         return lstore
 
 
     def prepare_habit_list(self, widget):
-        habit_list = habitjewel_utils.get_habits_list(conn, self.view_date)
+        self.habit_list = habitjewel_utils.get_habits_list(conn, self.view_date)
 
-        for item in habit_list:
+        for item in self.habit_list:
             lstore_iter = self.habit_list_model.append()
             icon_pixbuf = self.get_pixbuf_filename_for_status (item['pct_complete'])
  
@@ -477,12 +482,12 @@ class MainWindow:
         renderer.set_property('wrap-mode', gtk.WRAP_WORD)
         renderer.set_property('wrap-width', self.line_wrap_width)
         column = gtk.TreeViewColumn('Habit title', renderer, markup=TV_HABIT_LIST_DESC)
-        column.set_property("expand", True)
+        column.set_property('expand', True)
         treeview.append_column(column)
 
         # column for checkbox
         checkbox = CellRendererClickablePixbuf()
-        checkbox.connect("clicked", self.habit_toggled, treeview)
+        checkbox.connect('clicked', self.habit_toggled, treeview)
         column = gtk.TreeViewColumn('Status', checkbox, pixbuf=TV_HABIT_LIST_PIXBUF)
         treeview.append_column(column)
 
@@ -531,7 +536,7 @@ class MainWindow:
 
 
     def get_date_label_text(self, widget):
-        date_disp = self.view_date.strftime("%a %d %B %Y")
+        date_disp = self.view_date.strftime('%a %d %B %Y')
         return date_disp
 
 
@@ -553,30 +558,44 @@ class MainWindow:
         self.top_window.queue_draw()
 
 
+    def edit_habit (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit_edit_screen (widget, self.touched_habit)
+
+
     #TODO: Everything below here
     #def habit_edit_screen(self, widget, habit_id=None):
-    def habit_edit_screen(self, widget, var3, var4):
-        print "var3 = " + str(var3)
-        print "var4 = " + str(var4)
-
-        title = var4.get_title()
-        print "title = " + title
-        tv = var4.get_tree_view()
+    def habit_edit_screen(self, widget, habit=None):
 
         st_win = hildon.StackableWindow()
-        st_win.get_screen().connect("size-changed", self.orientation_changed)
+        st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox = gtk.VBox()
 
-        if (not habit_id):
+        if (not habit):
             win_title = _('Add new habit')
         else:
             win_title = _('Edit habit')
-            habit = habitjewel_utils.get_habit_details(conn, habit_id)
-            measures = habitjewel_utils.get_measures_list(conn)
-            categories = habitjewel_utils.get_categories_list(conn)
+            #habit = habitjewel_utils.get_habit_details(conn, habit_id)
+            #measures = habitjewel_utils.get_measures_list(conn)
+            #categories = habitjewel_utils.get_categories_list(conn)
 
         # Draw new/edit habit form 
 
+        table = gtk.Table(2, 2)
+        table.set_row_spacings(6)
+        table.set_col_spacings(6)
+
+        title_label = gtk.Label()
+        title_label.set_markup('<b>' + _('Title') + '</b>')
+        title_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        table.attach(title_label, 0, 1, 0, 1, gtk.FILL, 0)
+        table.attach(title_entry, 1, 2, 0, 1)
+
+        vbox.pack_start(table, True, True, 0)
+
+        st_win.add(vbox)
         st_win.set_title(win_title)
         st_win.show_all()
 
@@ -586,16 +605,16 @@ class MainWindow:
         # vbox_cal.pack_start(cal, True, True) 
         # st_win.add(vbox_cal)
         # st_win.show_all()
-        # cal.connect("day_selected", self.calendar_date_selected, st_win)
+        # cal.connect('day_selected', self.calendar_date_selected, st_win)
 
         # menu = self.make_edit_menu(kind)
         # win.set_app_menu(menu)
 
 
         self.entitle = hildon.Entry(fhsize)
-        self.entitle.set_placeholder(_("Title"))
+        self.entitle.set_placeholder(_('Title'))
         self.entitle.set_text(self.title)
-        self.entitle.connect("changed", self.change_title)
+        self.entitle.connect('changed', self.change_title)
 
         self.mainbox = gtk.VBox()
         self.mainbox.pack_start(self.entitle, False, False, 0)
@@ -622,8 +641,8 @@ class MainWindow:
 
         menu = hildon.AppMenu()
 
-        button = gtk.Button(_("Save"))
-        button.connect("clicked", self.save_habit)
+        button = gtk.Button(_('Save'))
+        button.connect('clicked', self.save_habit)
         menu.append(button)
 
         menu.show_all()
@@ -641,174 +660,6 @@ class MainWindow:
             return False
         else:
             return True
-
-
-    def pressed(self, widget, event):
-        print "in pressed()"
-        self.press_in_progress = True
-        self.last_press_epoch = event.time
-
-        self.drag_start_x = event.x
-        self.drag_start_y = event.y
-        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
-
-        self.drag_x = event.x
-        self.drag_y = event.y
-
-        self.press_length_timer = gobject.timeout_add(100, self.check_still_pressed, \
-            widget, event, event.button, event.time, time.time(), event.x, event.y)
-
-        
-    def released(self, widget, event):
-        print "in released()"
-        self.press_in_progress = False
-        
-
-    def check_still_pressed(self, widget, event, button, press_start_epoch, \
-            press_start_time, start_x, start_y):
-        print "in check_still_pressed()"
-
-        dur = (time.time() - press_start_time) * 1000
-        if dur > 10000:
-            print "DEBUG: long press timeout reached"
-            return False
-
-        if press_start_epoch == self.last_press_epoch and self.press_in_progress:
-            if dur < 500:
-                self.handle_long_press(widget, event, button, press_start_epoch, dur, \
-                    start_x, start_y, self.drag_x, self.drag_y)
-                return True
-
-        return False
-#            else:
-#        else: # the press ended or a new press is in progress -> stop the timer
-#            return False
-#            self.released(widget, event, button, press_start_epoch, \
-#                    press_start_time, start_x, start_y)
-
-
-    def xpressed(self, widget, event):
-        global i
-        """Press-handler"""
-        i += 1
-        for h in range(i):
-            sys.stdout.write("*")
-            sys.stdout.flush()
-        print "in pressed() - widget = " + str(widget) + ", event = " + str(event)
-        self.last_press_epoch = event.time
-        self.press_in_progress = True
-
-        self.drag_start_x = event.x
-        self.drag_start_y = event.y
-        print("Pressed button %d at %1.0f, %1.0f" % (event.button, event.x, event.y))
-
-        self.drag_x = event.x
-        self.drag_y = event.y
-
-        if not self.press_length_timer:
-            # 50 ms constitutes a long press
-            self.press_length_timer = gobject.timeout_add(100, self.check_still_pressed, \
-                widget, event, event.button, event.time, time.time(), event.x, event.y)
-        else:
-            print "self.press_length_timer not False... - no setting timeout"
-
-
-    def xreleased(self, widget, event, button, press_start_epoch, \
-            press_start_time, start_x, start_y):
-        print("Released button %d at %1.0f, %1.0f" % (button, start_x, start_y))
-        self.press_length_timer = False
-        self.press_in_progress = False
-        ms_duration = press_start_epoch - self.last_press_epoch
-        
-        dx = start_x - self.drag_start_x
-        dy = start_y - self.drag_start_y
-
-        #dist_sq = dx * dx + dy * dy
-        #if dist_sq < CLICK_DRAG_THRESHOLD:
-        #    self.click(event.x, event.y, msDuration)
-
-        self.habit_list_menu.popdown()
-        self.habit_list_menu_visible = False
-
-
-    def xcheck_still_pressed(self, widget, event, button, press_start_epoch, \
-            press_start_time, start_x, start_y):
-        """check if a press is still in progress and report:
-        press start epoch - to differentiate presses
-        duration
-        start coordinates
-        current coordinates
-        if no press is in progress or another press already started, shut down the timer"""
-        print "in check_still_pressed()"
-
-        # just to be sure, time out after 10 seconds
-        # - provided the released signal is always called, this timeout might not be
-        # necessary, but better be safe, than eat the whole battery if the timer is
-        # not terminated
-        dur = (time.time() - press_start_time) * 1000
-        if dur > 10000:
-            print "DEBUG: long press timeout reached"
-            return False
-        print "press_start_epoch = " + str(press_start_epoch)
-        print "self.last_press_epoch = " + str(self.last_press_epoch)
-        print "self.press_in_progress = " + str(self.press_in_progress)
-        if press_start_epoch == self.last_press_epoch and self.press_in_progress:
-            self.handle_long_press(widget, event, button, press_start_epoch, dur, \
-                    start_x, start_y, self.drag_x, self.drag_y)
-            return True
-        else: # the press ended or a new press is in progress -> stop the timer
-            self.press_length_timer = None
-            print "STOP TIMER"
-            print " "
-            # self.released(widget, event)
-            self.released(widget, event, button, press_start_epoch, \
-                    press_start_time, start_x, start_y)
-            return False
-
-
-    def handle_long_press(self, widget, event, button, press_start_epoch, \
-            ms_current_duration, start_x, start_y, x, y):
-        """handle long press"""
-        # find out which widget
-        widget_name = widget.get_name()
-        #self.press_in_progress = False
-        print "in handle_long_press() for widget name = " + widget_name
-        if widget_name == 'HabitListTreeview':
-            self.long_press_habit_list_item(event, button, press_start_epoch, \
-                    ms_current_duration, start_x, start_y, x, y)
-
-
-    def long_press_habit_list_item(self, event, button, press_start_epoch, \
-            ms_current_duration, start_x, start_y, x, y):
-        print "in long_press_habit_list_item()"
-        if not self.habit_list_menu_visible:
-            print "...not self.habit_list_menu_visible"
-            path_info = self.habit_list_tv.get_path_at_pos(int(x), int(y))
-            if path_info is not None:
-                print "...path_info not none"
-                path, col, cell_x, cell_y = path_info
-                self.habit_list_tv.set_cursor(path, col, 0)
-                self.habit_list_tv.grab_focus()
-                self.habit_list_menu.popup (None, None, None, button, press_start_epoch)
-                self.habit_list_menu_visible = True
-
-
-    def set_habit_list_item_context_menu (self, widget):
-        """do"""
-        menu = gtk.Menu()
-        menu_item = gtk.MenuItem(_("Edit"))
-        menu.append(menu_item)
-        menu_item.show()
-        menu_item.connect("activate", self.edit_habit, widget)
-        self.habit_list_menu = menu
-
-
-    def edit_habit (self, menu_item, widget):
-        (path, column) = self.habit_list_tv.get_cursor()
-        print str(path)
-        print str(column)
-        print str(menu_item)
-        self.press_in_progress = False
 
 
     def event_catcher(self, widget, event):
