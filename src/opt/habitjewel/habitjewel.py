@@ -117,7 +117,7 @@ else:
         """)
     cursor.execute(
         """
-        CREATE TABLE habits (id INTEGER PRIMARY KEY, title TEXT,
+        CREATE TABLE habits (id INTEGER PRIMARY KEY, activity TEXT,
             measure_id INTEGER, target INTEGER,
             priority INTEGER, interval_type TEXT, interval TEXT,
             points INTEGER, created_date DATE, deleted_date DATE)
@@ -163,37 +163,37 @@ else:
         """, ['word', 'words', 'words'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 1, 30, 1, 'Day', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 100, CURRENT_DATE)
         """, ['Meditate'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study French'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study Spanish'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
         """, ['Study software development'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 2, 2, 3, 'Day', 'Mon,Wed,Fri,Sun', 100, CURRENT_DATE)
         """, ['Walk'])
     cursor.execute(
         """
-        INSERT INTO habits (title, measure_id, target, priority,
+        INSERT INTO habits (activity, measure_id, target, priority,
             interval_type, interval, points, created_date)
             VALUES (?, 2, 50, 2, 'Week', '1', 100, CURRENT_DATE)
         """, ['Cycle'])
@@ -449,7 +449,7 @@ class MainWindow:
                 TV_HABIT_LIST_ID, \
                     item['id'], \
                 TV_HABIT_LIST_DESC, \
-                    '<b>' + item['title'] + '</b> ' + str(item['target_desc']) \
+                    '<b>' + item['activity'] + '</b> ' + str(item['target_desc']) \
                     + ' <i>' + item['by_when'] + '</i>', \
                 TV_HABIT_LIST_PCT_COMPLETE, \
                     item['pct_complete'], \
@@ -477,11 +477,11 @@ class MainWindow:
         column.set_visible(False)
         treeview.append_column(column)
 
-        # column for title
+        # column for activity
         renderer = gtk.CellRendererText()
         renderer.set_property('wrap-mode', gtk.WRAP_WORD)
         renderer.set_property('wrap-width', self.line_wrap_width)
-        column = gtk.TreeViewColumn('Habit title', renderer, markup=TV_HABIT_LIST_DESC)
+        column = gtk.TreeViewColumn('Habit activity', renderer, markup=TV_HABIT_LIST_DESC)
         column.set_property('expand', True)
         treeview.append_column(column)
 
@@ -569,6 +569,9 @@ class MainWindow:
     #def habit_edit_screen(self, widget, habit_id=None):
     def habit_edit_screen(self, widget, habit=None):
 
+        measures = habitjewel_utils.get_measures_list(conn)
+        categories = habitjewel_utils.get_categories_list(conn)
+
         st_win = hildon.StackableWindow()
         st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox = gtk.VBox()
@@ -578,20 +581,66 @@ class MainWindow:
         else:
             win_title = _('Edit habit')
             #habit = habitjewel_utils.get_habit_details(conn, habit_id)
-            #measures = habitjewel_utils.get_measures_list(conn)
-            #categories = habitjewel_utils.get_categories_list(conn)
 
         # Draw new/edit habit form 
 
-        table = gtk.Table(2, 2)
-        table.set_row_spacings(6)
-        table.set_col_spacings(6)
+        table = gtk.Table(3, 2)
+        #table.set_row_spacings(2)
+        #table.set_col_spacings(2)
 
-        title_label = gtk.Label()
-        title_label.set_markup('<b>' + _('Title') + '</b>')
-        title_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        table.attach(title_label, 0, 1, 0, 1, gtk.FILL, 0)
-        table.attach(title_entry, 1, 2, 0, 1)
+        # Habit activity
+        l = gtk.Label()
+        l.set_markup('<b>' + _('Activity') + '</b>')
+        a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        a_entry.set_text(habit['activity'])
+        table.attach(l, 0, 1, 0, 1, gtk.FILL, 0)
+        table.attach(a_entry, 1, 2, 0, 1)
+
+        # Habit target
+        # (change to SpinButton ?)
+        l = gtk.Label()
+        l.set_markup('<b>' + _('Target') + '</b>')
+        #adj = gtk.Adjustment(habit['target'], 0, 100, 1, 0, 0)
+        #t_spin = gtk.SpinButton(adj, 0, 0)
+        #t_spin.set_numeric(t_spin)
+        t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        t_entry.set_text(str(habit['target']))
+        table.attach(l, 0, 1, 1, 2, gtk.FILL, 0)
+        table.attach(t_entry, 1, 2, 1, 2)
+
+        # Habit measure
+        l = gtk.Label()
+        l.set_markup('<b>' + _('Measure') + '</b>')
+        m_selector = hildon.TouchSelector(text = True)
+        store_measures = gtk.ListStore(gobject.TYPE_INT, gobject.TYPE_STRING)
+        for measure in measures:
+            print str(measure)
+            iter = store_measures.append()
+            store_measures.set(iter, 0, measure['id'], 1, measure['desc'])
+        m_entry = gtk.CellRendererText()
+        column = m_selector.append_column(store_measures, m_entry, id = 0)
+        column.set_property("text-column", 1)
+        table.attach(l, 0, 1, 2, 3, gtk.FILL, 0)
+        table.attach(m_selector, 1, 2, 2, 3)
+
+        """
+        column = gtk.TreeViewColumn('ID', gtk.CellRendererText(), text=TV_HABIT_LIST_ID)
+        column.set_visible(False)
+        treeview.append_column(column)
+        """
+
+        """
+        l = gtk.Label()
+        l.set_markup('<b>' + _('Measure') + '</b>')
+        m_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        m_entry.set_text(str(habit['measure']))
+        table.attach(l, 0, 1, 1, 2, gtk.FILL, 0)
+        table.attach(m_entry, 1, 2, 1, 2)
+        """
+
+        # Habit interval_type
+
+        # Habit interval
 
         vbox.pack_start(table, True, True, 0)
 
@@ -610,7 +659,7 @@ class MainWindow:
         # menu = self.make_edit_menu(kind)
         # win.set_app_menu(menu)
 
-
+        """
         self.entitle = hildon.Entry(fhsize)
         self.entitle.set_placeholder(_('Title'))
         self.entitle.set_text(self.title)
@@ -634,7 +683,7 @@ class MainWindow:
 
         win.add(self.mainbox)
         win.show_all()
-
+        """
 
     def make_edit_menu(self, kind):
         kind = self.mode

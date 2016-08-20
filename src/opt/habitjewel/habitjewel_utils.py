@@ -7,7 +7,7 @@ import hildon
 fhsize = gtk.HILDON_SIZE_FINGER_HEIGHT
 horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 
-##Return the titles and ids of the all recipes in the database
+##Return the activitys and ids of the all recipes in the database
 ##return a list similar to [(1, 'recipe1'), (2, 'recipe2')]
 def get_habits_list(conn, view_date):
     view_day_abbrev = view_date.strftime("%a")
@@ -16,7 +16,7 @@ def get_habits_list(conn, view_date):
 
     for row in conn.execute(
         """
-        SELECT DISTINCT h.id, h.title, unit, plural, target,
+        SELECT DISTINCT h.id, h.activity, unit, plural, target,
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS target_desc,
             CASE interval_type
                 WHEN 'Day' THEN 'today'
@@ -50,14 +50,14 @@ def get_habits_list(conn, view_date):
                      OR (   interval_type = 'Week'
                         AND STRFTIME('%W', ?) % interval = 0)
                 )
-            ORDER BY priority, h.title
+            ORDER BY priority, h.activity
         """, [view_date, view_date, view_date, view_date, view_date, view_date, \
             '%' + view_day_abbrev + '%', view_date]
     ):
 
         habit = { \
             'id':               row[0], \
-            'title':            row[1], \
+            'activity':         row[1], \
             'unit':             row[2], \
             'plural':           row[3], \
             'target':           row[4], \
@@ -114,7 +114,7 @@ def get_categories_list(conn):
 
         category = { \
             'id':               row[0], \
-            'title':            row[1], \
+            'activity':         row[1], \
             'created_date':     row[2], \
             'deleted_date':     row[3]
         }
@@ -126,7 +126,7 @@ def get_categories_list(conn):
 def get_habit_details(conn, habit_id):
     habit = conn.execute(
         """
-        SELECT DISTINCT h.id, h.title, unit, plural, target,
+        SELECT DISTINCT h.id, h.activity, unit, plural, target,
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
             interval_type,
             interval,
