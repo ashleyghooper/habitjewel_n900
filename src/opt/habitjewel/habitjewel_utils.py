@@ -7,8 +7,8 @@ import hildon
 fhsize = gtk.HILDON_SIZE_FINGER_HEIGHT
 horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 
-##Return the activitys and ids of the all recipes in the database
-##return a list similar to [(1, 'recipe1'), (2, 'recipe2')]
+##Return the details of all the habits in the database
+##return a list similar to [(1, 'Meditate', 'minutes', 'minute', 'minutes', 30, ... )]
 def get_habits_list(conn, view_date):
     view_day_abbrev = view_date.strftime("%a")
 
@@ -16,21 +16,24 @@ def get_habits_list(conn, view_date):
 
     for row in conn.execute(
         """
-        SELECT DISTINCT h.id, h.activity, unit, plural, target,
+        SELECT DISTINCT h.id, h.activity, m.desc, unit, plural, target,
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS target_desc,
-            CASE interval_type
-                WHEN 'Day' THEN 'today'
-                ELSE 'this week'
+            CASE interval_code
+                WHEN 'DAY' THEN 'today'
+                WHEN 'WEEK' THEN 'this week'
+                ELSE 'this month'
             END AS by_when,
-            interval_type, interval,
+            interval_code, interval,
             points, 
-            CASE interval_type
-                WHEN 'Day' THEN IFNULL(hsd.percent_complete, -1)
-                ELSE IFNULL(hsw.percent_complete, -1)
+            CASE interval_code
+                WHEN 'DAY' THEN IFNULL(hsd.percent_complete, -1)
+                WHEN 'WEEK' THEN IFNULL(hsw.percent_complete, -1)
+                ELSE IFNULL(hsm.percent_complete, -1)
             END AS percent_complete,
-            CASE interval_type
-                WHEN 'Day' THEN IFNULL(points * hsd.percent_complete, 0)
-                ELSE IFNULL(points * hsw.percent_complete, 0)
+            CASE interval_code
+                WHEN 'DAY' THEN IFNULL(points * hsd.percent_complete, 0)
+                WHEN 'WEEK' THEN IFNULL(points * hsw.percent_complete, 0)
+                ELSE IFNULL(points * hsm.percent_complete, 0)
             END AS score,
             priority
             FROM habits h
@@ -42,33 +45,41 @@ def get_habits_list(conn, view_date):
                 LEFT JOIN history hsw
                     ON hsw.habit_id = h.id
                          AND STRFTIME('%W', hsw.date) = STRFTIME('%W', ?)
+                LEFT JOIN history hsm
+                    ON hsm.habit_id = h.id
+                         AND STRFTIME('%M', hsm.date) = STRFTIME('%M', ?)
             WHERE IFNULL(h.created_date, ?) <= ?
                 AND IFNULL(h.deleted_date, ?) >= ?
                 AND (
-                        (   interval_type = 'Day'
+                        (   interval_code = 'DAY'
                         AND interval LIKE ?)
-                     OR (   interval_type = 'Week'
+                     OR (   interval_code = 'WEEK'
                         AND STRFTIME('%W', ?) % interval = 0)
+                     OR (   interval_code = 'MONTH'
+                        AND STRFTIME('%M', ?) % interval = 0)
                 )
             ORDER BY priority, h.activity
         """, [view_date, view_date, view_date, view_date, view_date, view_date, \
-            '%' + view_day_abbrev + '%', view_date]
+                view_date, '%' + view_day_abbrev + '%', view_date, view_date]
     ):
+
+        # habits_list.append(row)
 
         habit = { \
             'id':               row[0], \
             'activity':         row[1], \
-            'unit':             row[2], \
-            'plural':           row[3], \
-            'target':           row[4], \
-            'target_desc':      row[5], \
-            'by_when':          row[6], \
-            'interval_type':    row[7], \
-            'interval':         row[8], \
-            'points':           row[9], \
-            'pct_complete':     row[10], \
-            'score':            row[11], \
-            'priority':         row[12] \
+            'measure_desc':     row[2], \
+            'unit':             row[3], \
+            'plural':           row[4], \
+            'target':           row[5], \
+            'target_desc':      row[6], \
+            'by_when':          row[7], \
+            'interval_code':    row[8], \
+            'interval':         row[9], \
+            'points':           row[10], \
+            'pct_complete':     row[11], \
+            'score':            row[12], \
+            'priority':         row[13] \
         }
         habits_list.append(habit)
 
@@ -98,6 +109,30 @@ def get_measures_list(conn):
         measures_list.append(measure)
 
     return measures_list
+
+
+def get_interval_types_list(conn):
+
+    interval_types_list=[]
+
+    for row in conn.execute(
+        """
+        SELECT DISTINCT id, code, desc, created_date, deleted_date
+            FROM interval_types
+            ORDER BY id
+        """
+    ):
+
+        interval_type = { \
+            'id':               row[0], \
+            'code':             row[1], \
+            'desc':             row[2], \
+            'created_date':     row[3], \
+            'deleted_date':     row[4]
+        }
+        interval_types_list.append(interval_type)
+
+    return interval_types_list
 
 
 def get_categories_list(conn):

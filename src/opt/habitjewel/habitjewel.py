@@ -119,8 +119,13 @@ else:
         """
         CREATE TABLE habits (id INTEGER PRIMARY KEY, activity TEXT,
             measure_id INTEGER, target INTEGER,
-            priority INTEGER, interval_type TEXT, interval TEXT,
+            priority INTEGER, interval_code TEXT, interval TEXT,
             points INTEGER, created_date DATE, deleted_date DATE)
+        """)
+    cursor.execute(
+        """
+        CREATE TABLE interval_types (id INTEGER PRIMARY KEY, code TEXT,
+            desc TEXT, created_date DATE, deleted_date DATE)
         """)
     cursor.execute(
         """
@@ -129,13 +134,13 @@ else:
         """)
     cursor.execute(
         """
-        CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT, desc TEXT,
-            created_date DATE, deleted_date DATE)
+        CREATE TABLE history (id INTEGER PRIMARY KEY, habit_id INTEGER, date DATE,
+            percent_complete INTEGER)
         """)
     cursor.execute(
         """
-        CREATE TABLE history (id INTEGER PRIMARY KEY, habit_id INTEGER, date DATE,
-            percent_complete INTEGER)
+        CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT, desc TEXT,
+            created_date DATE, deleted_date DATE)
         """)
     cursor.execute(
         """
@@ -151,6 +156,21 @@ else:
         """, ['Academic'])
     cursor.execute(
         """
+        INSERT INTO interval_types (code, desc, created_date)
+            VALUES (?, ?, CURRENT_DATE)
+        """, ['DAY', 'Daily'])
+    cursor.execute(
+        """
+        INSERT INTO interval_types (code, desc, created_date)
+            VALUES (?, ?, CURRENT_DATE)
+        """, ['WEEK', 'Weekly'])
+    cursor.execute(
+        """
+        INSERT INTO interval_types (code, desc, created_date)
+            VALUES (?, ?, CURRENT_DATE)
+        """, ['MONTH', 'Monthly'])
+    cursor.execute(
+        """
         INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
         """, ['min', 'mins', 'minute'])
     cursor.execute(
@@ -164,38 +184,38 @@ else:
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'Day', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 1, 30, 1, 'DAY', 'Mon,Tue,Wed,Thu,Fri,Sat,Sun', 100, CURRENT_DATE)
         """, ['Meditate'])
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 1, 30, 1, 'WEEK', '1', 100, CURRENT_DATE)
         """, ['Study French'])
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 1, 30, 1, 'WEEK', '1', 100, CURRENT_DATE)
         """, ['Study Spanish'])
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'Week', '1', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 1, 60, 1, 'MONTH', '1', 100, CURRENT_DATE)
         """, ['Study software development'])
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 2, 2, 3, 'Day', 'Mon,Wed,Fri,Sun', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 2, 2, 3, 'DAY', 'Mon,Wed,Fri,Sun', 100, CURRENT_DATE)
         """, ['Walk'])
     cursor.execute(
         """
         INSERT INTO habits (activity, measure_id, target, priority,
-            interval_type, interval, points, created_date)
-            VALUES (?, 2, 50, 2, 'Week', '1', 100, CURRENT_DATE)
+            interval_code, interval, points, created_date)
+            VALUES (?, 2, 50, 2, 'WEEK', '1', 100, CURRENT_DATE)
         """, ['Cycle'])
     
     conn.commit()
@@ -456,7 +476,7 @@ class MainWindow:
                 TV_HABIT_LIST_PIXBUF, \
                     icon_pixbuf, \
                 TV_HABIT_LIST_INTVL_TYPE, \
-                    item['interval_type'] \
+                    item['interval_code'] \
             )
 
 
@@ -567,9 +587,8 @@ class MainWindow:
 
     #TODO: Everything below here
     #def habit_edit_screen(self, widget, habit_id=None):
-    def habit_edit_screen(self, widget, habit=None):
+    def habit_edit_screen(self, widget, habit = None):
 
-        measures = habitjewel_utils.get_measures_list(conn)
         categories = habitjewel_utils.get_categories_list(conn)
 
         st_win = hildon.StackableWindow()
@@ -584,7 +603,7 @@ class MainWindow:
 
         # Draw new/edit habit form 
 
-        table = gtk.Table(3, 2)
+        table = gtk.Table(3, 3)
         #table.set_row_spacings(2)
         #table.set_col_spacings(2)
 
@@ -593,8 +612,8 @@ class MainWindow:
         l.set_markup('<b>' + _('Activity') + '</b>')
         a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
         a_entry.set_text(habit['activity'])
-        table.attach(l, 0, 1, 0, 1, gtk.FILL, 0)
-        table.attach(a_entry, 1, 2, 0, 1)
+        table.attach(l, 0, 1, 0, 1, gtk.FILL)
+        table.attach(a_entry, 1, 3, 0, 1)
 
         # Habit target
         # (change to SpinButton ?)
@@ -603,25 +622,34 @@ class MainWindow:
         #adj = gtk.Adjustment(habit['target'], 0, 100, 1, 0, 0)
         #t_spin = gtk.SpinButton(adj, 0, 0)
         #t_spin.set_numeric(t_spin)
-        t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        t_entry.set_text(str(habit['target']))
-        table.attach(l, 0, 1, 1, 2, gtk.FILL, 0)
-        table.attach(t_entry, 1, 2, 1, 2)
+        t_selector = self.create_target_selector(habit['target'])
+        t_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        t_picker.set_title(_('Target'))
+        t_picker.set_selector(t_selector)
+        table.attach(t_picker, 1, 2, 1, 2, gtk.FILL)
+
+        #t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        #t_entry.set_text(str(habit['target']))
+        #table.attach(l, 0, 1, 1, 2, gtk.FILL)
+        #table.attach(t_entry, 1, 2, 1, 2)
 
         # Habit measure
-        l = gtk.Label()
-        l.set_markup('<b>' + _('Measure') + '</b>')
-        m_selector = hildon.TouchSelector(text = True)
-        store_measures = gtk.ListStore(gobject.TYPE_INT, gobject.TYPE_STRING)
-        for measure in measures:
-            print str(measure)
-            iter = store_measures.append()
-            store_measures.set(iter, 0, measure['id'], 1, measure['desc'])
-        m_entry = gtk.CellRendererText()
-        column = m_selector.append_column(store_measures, m_entry, id = 0)
-        column.set_property("text-column", 1)
-        table.attach(l, 0, 1, 2, 3, gtk.FILL, 0)
-        table.attach(m_selector, 1, 2, 2, 3)
+        m_selector = self.create_measures_selector(habit['measure_desc'])
+        m_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        m_picker.set_title(_('Measure'))
+        m_picker.set_selector(m_selector)
+        table.attach(m_picker, 2, 3, 1, 2, gtk.FILL)
+
+        # Habit interval type
+        i_selector = self.create_interval_type_selector(habit['interval_code'])
+        i_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        i_picker.set_title(_('Interval Type'))
+        i_picker.set_selector(i_selector)
+        table.attach(i_picker, 1, 2, 2, 3, gtk.FILL)
+
 
         """
         column = gtk.TreeViewColumn('ID', gtk.CellRendererText(), text=TV_HABIT_LIST_ID)
@@ -696,6 +724,59 @@ class MainWindow:
 
         menu.show_all()
         return menu
+
+
+    def create_target_selector(self, selected_target = None):
+        selector = hildon.TouchSelector(text = True)
+        for i in range(101):
+            selector.append_text(str(i - 1))
+            if str(i - 1) == str(selected_target):
+                selector.set_active(0, i)
+            #store_measures.set_value(iter, 0, measure['id'], 1, measure['desc'])
+            #store_measures.set(iter, 0, measure['desc'])
+#            index += 1
+        #renderer = gtk.CellRendererText()
+        #renderer = gtk.CellRendererPixbuf()
+        #renderer.set_fixed_size(-1, 100)
+        #column = selector.append_column(store_measures, renderer, text = 0)
+        #column.set_property('text-column', 0)
+        return selector
+
+
+    def create_measures_selector(self, selected_measure = None):
+        measures = habitjewel_utils.get_measures_list(conn)
+        selector = hildon.TouchSelector(text = True)
+        #store_measures = gtk.ListStore(gobject.TYPE_INT, gobject.TYPE_STRING)
+        #store_measures = gtk.ListStore(gobject.TYPE_STRING)
+        index = 0
+        for measure in measures:
+            print str(measure)
+            #iter = store_measures.append()
+            selector.append_text(measure['desc'])
+            if str(measure['desc']) == str(selected_measure):
+                selector.set_active(0, index)
+            #store_measures.set_value(iter, 0, measure['id'], 1, measure['desc'])
+            #store_measures.set(iter, 0, measure['desc'])
+            index += 1
+        #renderer = gtk.CellRendererText()
+        #renderer = gtk.CellRendererPixbuf()
+        #renderer.set_fixed_size(-1, 100)
+        #column = selector.append_column(store_measures, renderer, text = 0)
+        #column.set_property('text-column', 0)
+        return selector
+
+
+    def create_interval_type_selector(self, selected_interval_code = None):
+        interval_types = habitjewel_utils.get_interval_types_list(conn)
+        selector = hildon.TouchSelector(text = True)
+        index = 0
+        for interval_type in interval_types:
+            print str(interval_type)
+            selector.append_text(interval_type['desc'])
+            if str(interval_type['code']) == str(selected_interval_code):
+                selector.set_active(0, index)
+            index += 1
+        return selector
 
 
     def save_habit():
