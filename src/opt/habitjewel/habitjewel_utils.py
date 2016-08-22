@@ -10,7 +10,7 @@ horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 ##Return the details of all the habits in the database
 ##return a list similar to [(1, 'Meditate', 'minutes', 'minute', 'minutes', 30, ... )]
 def get_habits_list(conn, view_date):
-    view_day_abbrev = view_date.strftime("%a")
+    view_week_day_num = view_date.strftime("%w")
 
     habits_list=[]
 
@@ -24,6 +24,7 @@ def get_habits_list(conn, view_date):
                 ELSE 'this month'
             END AS by_when,
             interval_code, interval,
+            limit_week_day_nums,
             points, 
             CASE interval_code
                 WHEN 'DAY' THEN IFNULL(hsd.percent_complete, -1)
@@ -52,34 +53,39 @@ def get_habits_list(conn, view_date):
                 AND IFNULL(h.deleted_date, ?) >= ?
                 AND (
                         (   interval_code = 'DAY'
-                        AND interval LIKE ?)
+                        AND (   limit_week_day_nums IS NULL
+                             OR limit_week_day_nums LIKE ?)
+                        )
                      OR (   interval_code = 'WEEK'
                         AND STRFTIME('%W', ?) % interval = 0)
                      OR (   interval_code = 'MONTH'
                         AND STRFTIME('%M', ?) % interval = 0)
-                )
+                    )
             ORDER BY priority, h.activity
-        """, [view_date, view_date, view_date, view_date, view_date, view_date, \
-                view_date, '%' + view_day_abbrev + '%', view_date, view_date]
+        """, [view_date, view_date, view_date, view_date, view_date, \
+                view_date, view_date, \
+                '%' + view_week_day_num + '%', \
+                view_date, view_date]
     ):
 
         # habits_list.append(row)
 
         habit = { \
-            'id':               row[0], \
-            'activity':         row[1], \
-            'measure_desc':     row[2], \
-            'unit':             row[3], \
-            'plural':           row[4], \
-            'target':           row[5], \
-            'target_desc':      row[6], \
-            'by_when':          row[7], \
-            'interval_code':    row[8], \
-            'interval':         row[9], \
-            'points':           row[10], \
-            'pct_complete':     row[11], \
-            'score':            row[12], \
-            'priority':         row[13] \
+            'id':                   row[0], \
+            'activity':             row[1], \
+            'measure_desc':         row[2], \
+            'unit':                 row[3], \
+            'plural':               row[4], \
+            'target':               row[5], \
+            'target_desc':          row[6], \
+            'by_when':              row[7], \
+            'interval_code':        row[8], \
+            'interval':             row[9], \
+            'limit_week_day_nums':  row[10], \
+            'points':               row[11], \
+            'pct_complete':         row[12], \
+            'score':                row[13], \
+            'priority':             row[14] \
         }
         habits_list.append(habit)
 
