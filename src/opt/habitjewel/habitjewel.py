@@ -597,7 +597,6 @@ class MainWindow:
 
         print str(habit)
 
-
         if habit:
             activity = habit['activity']
             target = habit['target']
@@ -613,6 +612,7 @@ class MainWindow:
             interval = None
             limit_week_day_nums = None
 
+
         # Get categories
         categories = habitjewel_utils.get_categories_list(conn)
 
@@ -624,7 +624,6 @@ class MainWindow:
             win_title = _('Add new habit')
         else:
             win_title = _('Edit habit')
-            #habit = habitjewel_utils.get_habit_details(conn, habit_id)
 
         # Draw new/edit habit form 
 
@@ -682,7 +681,7 @@ class MainWindow:
 
         if interval_code == 'DAY':
             # Allow limiting daily habit to specific days of the week
-            int_selector = self.create_limit_week_day_nums_selector(limit_week_day_nums)
+            int_selector = self.create_limit_week_days_selector(limit_week_day_nums)
             int_picker.set_title(_('Days of Week'))
 
         else:
@@ -774,37 +773,19 @@ class MainWindow:
             selector.append_text(str(i))
             if str(i) == str(selected_target):
                 selector.set_active(0, i)
-            #store_measures.set_value(iter, 0, measure['id'], 1, measure['desc'])
-            #store_measures.set(iter, 0, measure['desc'])
-#            index += 1
-        #renderer = gtk.CellRendererText()
-        #renderer = gtk.CellRendererPixbuf()
-        #renderer.set_fixed_size(-1, 100)
-        #column = selector.append_column(store_measures, renderer, text = 0)
-        #column.set_property('text-column', 0)
         return selector
 
 
     def create_measures_selector(self, selected_measure = None):
         measures = habitjewel_utils.get_measures_list(conn)
         selector = hildon.TouchSelector(text = True)
-        #store_measures = gtk.ListStore(gobject.TYPE_INT, gobject.TYPE_STRING)
-        #store_measures = gtk.ListStore(gobject.TYPE_STRING)
         index = 0
         for measure in measures:
             print str(measure)
-            #iter = store_measures.append()
             selector.append_text(measure['desc'])
             if str(measure['desc']) == str(selected_measure):
                 selector.set_active(0, index)
-            #store_measures.set_value(iter, 0, measure['id'], 1, measure['desc'])
-            #store_measures.set(iter, 0, measure['desc'])
             index += 1
-        #renderer = gtk.CellRendererText()
-        #renderer = gtk.CellRendererPixbuf()
-        #renderer.set_fixed_size(-1, 100)
-        #column = selector.append_column(store_measures, renderer, text = 0)
-        #column.set_property('text-column', 0)
         return selector
 
 
@@ -830,16 +811,13 @@ class MainWindow:
         return selector
 
 
-    def create_limit_week_day_nums_selector(self, selected_days_of_week = None):
+    def create_limit_week_days_selector(self, selected_days_of_week = None):
         selector = hildon.TouchSelector(text = True)
         selector.set_column_selection_mode(hildon.TOUCH_SELECTOR_SELECTION_MODE_MULTIPLE)
         for i in range(7):
             selector.append_text(calendar.day_abbr[i])
-            if selected_days_of_week:
-                print "selected days of week = " + selected_days_of_week
-                if selected_days_of_week.find(str(i)) != -1:
-                    print "day " + str(i) + " matched"
-                    selector.set_active(i, i)
+            if not selected_days_of_week or selected_days_of_week.find(str(i)) != -1:
+                selector.select_iter(0, selector.get_model(0).get_iter(i), True)
         return selector
 
 
