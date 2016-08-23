@@ -631,15 +631,6 @@ class MainWindow:
         #table.set_row_spacings(2)
         #table.set_col_spacings(2)
 
-        # Habit activity
-        a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        if activity and activity != '':
-            entry_text = activity
-        else:
-            entry_text = 'Describe activity'
-        a_entry.set_text(entry_text)
-        table.attach(a_entry, 0, 2, 0, 1)
-
         # Habit target
         # (change to SpinButton ?)
         #l = gtk.Label()
@@ -652,7 +643,7 @@ class MainWindow:
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         t_picker.set_title(_('Target'))
         t_picker.set_selector(t_selector)
-        table.attach(t_picker, 0, 1, 1, 2, gtk.FILL)
+        table.attach(t_picker, 0, 1, 0, 1, gtk.FILL)
 
         #t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
         #t_entry.set_text(str(habit['target']))
@@ -665,7 +656,7 @@ class MainWindow:
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         m_picker.set_title(_('Measure'))
         m_picker.set_selector(m_selector)
-        table.attach(m_picker, 1, 2, 1, 2, gtk.FILL)
+        table.attach(m_picker, 1, 2, 0, 1, gtk.FILL)
 
         # Habit interval type
         it_selector = self.create_interval_type_selector(interval_code)
@@ -673,7 +664,7 @@ class MainWindow:
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         it_picker.set_title(_('Interval Type'))
         it_picker.set_selector(it_selector)
-        table.attach(it_picker, 0, 1, 2, 3, gtk.FILL)
+        table.attach(it_picker, 0, 1, 1, 2, gtk.FILL)
 
         # Habit interval
         int_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
@@ -690,27 +681,25 @@ class MainWindow:
             int_picker.set_title(_('Interval'))
 
         int_picker.set_selector(int_selector)
-        table.attach(int_picker, 1, 2, 2, 3, gtk.FILL)
+        table.attach(int_picker, 1, 2, 1, 2, gtk.FILL)
 
-        """
-        column = gtk.TreeViewColumn('ID', gtk.CellRendererText(), text=TV_HABIT_LIST_ID)
-        column.set_visible(False)
-        treeview.append_column(column)
-        """
+        # Habit activity
+        a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        if activity and activity != '':
+            entry_text = activity
+        else:
+            entry_text = 'Describe activity here'
 
-        """
-        l = gtk.Label()
-        l.set_markup('<b>' + _('Measure') + '</b>')
-        m_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        m_entry.set_text(str(habit['measure']))
-        table.attach(l, 0, 1, 1, 2, gtk.FILL, 0)
-        table.attach(m_entry, 1, 2, 1, 2)
-        """
+        a_entry.set_text(entry_text)
+        a_entry.set_position(len(entry_text))
+        table.attach(a_entry, 0, 1, 2, 3)
 
-        # Habit interval_type
+        save_button = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        save_button.set_label(_('Save'))
+        table.attach(save_button, 1, 2, 2, 3, gtk.FILL)
+        save_button.connect('clicked', self.on_save_button_clicked)
 
-        # Habit interval
-
+        # Render
         vbox.pack_start(table, True, True, 0)
 
         st_win.add(vbox)
@@ -718,55 +707,6 @@ class MainWindow:
         st_win.show_all()
 
         
-
-        # Below goes after logic
-        # vbox_cal.pack_start(cal, True, True) 
-        # st_win.add(vbox_cal)
-        # st_win.show_all()
-        # cal.connect('day_selected', self.calendar_date_selected, st_win)
-
-        # menu = self.make_edit_menu(kind)
-        # win.set_app_menu(menu)
-
-        """
-        self.entitle = hildon.Entry(fhsize)
-        self.entitle.set_placeholder(_('Title'))
-        self.entitle.set_text(self.title)
-        self.entitle.connect('changed', self.change_title)
-
-        self.mainbox = gtk.VBox()
-        self.mainbox.pack_start(self.entitle, False, False, 0)
-
-        if self.is_portrait():
-            self.mainbox.pack_start(self.freqbtn, False, False, 0)
-            self.mainbox.pack_start(self.daysbtn, False, False, 0)
-
-        else:
-            self.hbox1 = gtk.HBox()
-            self.hbox1.set_homogeneous(True)
-            self.hbox1.pack_start(self.freqbtn, True, True, 0)
-            self.hbox1.pack_start(self.daysbtn, True, True, 0)
-            self.mainbox.pack_start(self.hbox1, False, False, 0)
-
-        #self.mainbox.pack_start(toolbar, False, False, 0)
-
-        win.add(self.mainbox)
-        win.show_all()
-        """
-
-    def make_edit_menu(self, kind):
-        kind = self.mode
-
-        menu = hildon.AppMenu()
-
-        button = gtk.Button(_('Save'))
-        button.connect('clicked', self.save_habit)
-        menu.append(button)
-
-        menu.show_all()
-        return menu
-
-
     def create_target_selector(self, selected_target = None):
         selector = hildon.TouchSelector(text = True)
         for i in range(101):
@@ -821,7 +761,7 @@ class MainWindow:
         return selector
 
 
-    def save_habit():
+    def on_save_button_clicked():
         return
 
 
