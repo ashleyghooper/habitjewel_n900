@@ -34,7 +34,7 @@ import sys
 import time
 
 from portrait import FremantleRotation
-from CellRendererClickablePixbuf import CellRendererClickablePixbuf
+from cell_renderer_clickable_pixbuf import CellRendererClickablePixbuf
 
 import habitjewel_utils
 

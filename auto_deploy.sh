@@ -7,7 +7,7 @@ current_path=`pwd`
 
 # set the project path
 local_project_path=$HOME/src/python/n900/habitjewel/
-remote_host=n901-usb
+remote_host=n900-usb
 remote_project_path=/home/user/src/python/n900/habitjewel/
 
 # set the event_epoch_time

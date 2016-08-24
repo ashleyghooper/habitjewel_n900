@@ -20,10 +20,10 @@ import glob,os
 for fpath in glob.glob('*/*.py[c|o]'):
     os.remove(fpath)
  
-changes = '* Fixed bug with pixmaps dir when in /optm'
+changes = '* Most basic functionality working'
  
 setup(name='habitjewel',
-      version='0.1.3',
+      version='0.2.0',
       license='GNU GPLv3',
       description='Record and track your progress in achieving your daily habits.',
       long_description='HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks. Ultimately it will keep track of accomplishment of the habits, award points, and allow some statistics and graphing.',
@@ -35,7 +35,7 @@ setup(name='habitjewel',
       url='',
       packages= ['habitjewel'],
       package_data = {'habitjewel': ['icons/*.png']},
-      data_files=[('/opt/habitjewel', ['habitjewel.py','habitjewel_utils.py','portrait.py']),
+      data_files=[('/opt/habitjewel', ['habitjewel.py','habitjewel_utils.py','cell_renderer_clickable_pixbuf.py','n900_maemo5_portrait.py']),
                   ('/usr/share/applications/hildon', ['habitjewel.desktop']),
                  ],
       scripts=[''],
@@ -52,7 +52,7 @@ setup(name='habitjewel',
       cmdclass={'sdist_maemo': _sdist_maemo},
       options = { 'sdist_maemo':{
       'debian_package':'habitjewel',
-      'buildversion':'2',
+      'buildversion':'1',
       'depends':'python2.5, python-hildondesktop, hildon-desktop-python-loader',
       'conflicts':'',
       'XSBC_Bugtracker':'',
