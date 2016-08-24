@@ -92,6 +92,44 @@ def get_habits_list(conn, view_date):
     return habits_list
 
 
+def save_habit(conn, habit):
+
+    activity = habit['activity']
+    target = habit['target']
+    measure_desc = habit['measure_desc']
+    interval_code = habit['interval_code']
+    interval = habit['interval']
+    limit_week_day_nums = habit['limit_week_day_nums']
+
+    if 'id' in habit:
+        habit_id = habit['id']
+
+        conn.execute(
+            """
+            UPDATE habits
+               SET activity = ?, target = ?, \
+                       measure_id = (SELECT id FROM measures WHERE desc = ?), \
+                       interval_code = ?, interval = ?, limit_week_day_nums = ? \
+             WHERE id = ?
+            """, [activity, target, measure_desc, \
+                    interval_code, interval, limit_week_day_nums, \
+                    habit_id])
+
+    else:
+
+        conn.execute(
+            """
+            INSERT INTO habits (activity, target, measure_id, interval_code, \
+                    interval, limit_week_day_nums, created_date)
+                VALUES (?, ?, (SELECT id FROM measures WHERE desc = ?),
+                    ?, ?, ?, CURRENT_DATE)
+            """, [activity, target, measure_desc, \
+                    interval_code, interval, limit_week_day_nums])
+
+
+    conn.commit()
+
+
 def get_measures_list(conn):
 
     measures_list=[]
@@ -169,7 +207,7 @@ def get_habit_details(conn, habit_id):
         """
         SELECT DISTINCT h.id, h.activity, unit, plural, target,
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
-            interval_type,
+            interval_code,
             interval,
             m.id, m.desc, m.unit, m.plural,
             FROM habits h
@@ -182,8 +220,8 @@ def get_habit_details(conn, habit_id):
     return habit
 
 
-def set_fulfillment_status (conn, habit_id, interval_type, view_date, percent):
-    if (interval_type == 'Day'):
+def set_fulfillment_status (conn, habit_id, interval_code, view_date, percent):
+    if (interval_code == 'DAY'):
         conn.execute(
             """
             INSERT OR REPLACE INTO history (id, habit_id, date, percent_complete)

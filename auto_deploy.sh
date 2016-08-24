@@ -7,8 +7,8 @@ current_path=`pwd`
 
 # set the project path
 local_project_path=$HOME/src/python/n900/habitjewel/
-remote_host=n900-usb
-remote_project_path=/home/user/src/python/habitjewel/
+remote_host=n901-usb
+remote_project_path=/home/user/src/python/n900/habitjewel/
 
 # set the event_epoch_time
 last_event_epoch=$(date +%s)
@@ -27,7 +27,7 @@ do
     difference=$(expr $event_epoch - $last_event_epoch)
     if [ $difference -gt 2 ]; then
         last_event_epoch=$(date +%s)
-        scp $affected_file $remote_host:/home/user/src/python/habitjewel/${dir}
+        scp $affected_file $remote_host:$remote_project_path/${dir}
         ssh -f $remote_host "source /etc/osso-af-init/af-defines.sh && /bin/sh $remote_project_path/auto_restart.sh"
         echo "At ${time} on ${date}, file ${file} was copied to $remote_host"
     fi

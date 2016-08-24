@@ -244,15 +244,14 @@ class MainWindow:
 
         # N900-specific
         self.osso_app_name = 'habitjewel'
-
         self.rotation_obj = self.init_autorotation()
+        # Below to be removed (probably)
+        #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
+        self.init_disp_orientation()
 
         self.top_window.connect('destroy', gtk.main_quit)
         self.top_window.get_screen().connect('size-changed', self.orientation_changed)
         self.program.add_window(self.top_window)
-
-        #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
-        self.init_disp_orientation()
 
         self.fontsize = 15
 
@@ -263,6 +262,10 @@ class MainWindow:
         self.top_window.add(self.container)
 
         self.top_window.show_all()
+
+        # Initialise properties object for new/editing habits
+        self.habit = None;
+
 
 
     def init_autorotation(self):
@@ -315,7 +318,7 @@ class MainWindow:
         button.connect('clicked', self.about)
         menu.append(button)
 
-        menu.connect('event', self.event_catcher)
+        # menu.connect('event', self.event_catcher)
 
         menu.show_all()
         return menu
@@ -447,8 +450,12 @@ class MainWindow:
         if result is not None:
             path, column, x, y = result
             model = self.habit_list_tv.get_model()
-            index = model.get_value(model.get_iter(path), TV_HABIT_LIST_ID) - 1
-            self.touched_habit = self.habit_list[index]
+            index = model.get_value(model.get_iter(path), TV_HABIT_LIST_ID)
+            # There's got to be a more efficient way of doing this
+            for habit in self.habit_list:
+                if habit['id'] == index:
+                    self.touched_habit = habit
+                    break
         else:
             self.touched_habit = None
 
@@ -581,7 +588,7 @@ class MainWindow:
 
 
     def new_habit (self, widget):
-        print str(widget)
+        self.habit = None
         self.habit_edit_screen (widget)
 
 
@@ -589,47 +596,43 @@ class MainWindow:
         if not self.touched_habit:
             return
         else:
-            self.habit_edit_screen (widget, self.touched_habit)
+            self.habit = self.touched_habit
+            self.habit_edit_screen (widget)
 
 
     #TODO: Everything below here
-    def habit_edit_screen(self, widget, habit = None):
-
-        print str(habit)
-
-        if habit:
-            activity = habit['activity']
-            target = habit['target']
-            measure = habit['measure_desc']
-            interval_code = habit['interval_code']
-            interval = habit['interval']
-            limit_week_day_nums = habit['limit_week_day_nums']
-        else:
-            activity = None
-            target = None
-            measure = None
-            interval_code = 'DAY'
-            interval = None
-            limit_week_day_nums = None
-
+    def habit_edit_screen(self, widget):
 
         # Get categories
         categories = habitjewel_utils.get_categories_list(conn)
 
-        st_win = hildon.StackableWindow()
-        st_win.get_screen().connect('size-changed', self.orientation_changed)
+        self.edit_win = hildon.StackableWindow()
+        self.edit_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox = gtk.VBox()
 
-        if (not habit):
+        if not self.habit:
+            self.habit = {'interval_code':'DAY', \
+                    'activity':'Describe activity here', \
+                    'target':'10', \
+                    'measure_desc':'minute', \
+                    'limit_week_day_nums':'0,1,2,3,4,5,6', \
+                    'interval':'' \
+                    }
             win_title = _('Add new habit')
         else:
             win_title = _('Edit habit')
 
         # Draw new/edit habit form 
 
-        table = gtk.Table(3, 3)
-        #table.set_row_spacings(2)
-        #table.set_col_spacings(2)
+        table = gtk.Table(2, 2, True)
+        table.set_row_spacings(5)
+        table.set_col_spacings(5)
+
+        # Habit activity
+        a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
+        a_entry.set_text(self.habit['activity'])
+        a_entry.set_position(len(self.habit['activity']))
+        a_entry.connect('changed', self.on_activity_changed)
 
         # Habit target
         # (change to SpinButton ?)
@@ -638,12 +641,13 @@ class MainWindow:
         #adj = gtk.Adjustment(habit['target'], 0, 100, 1, 0, 0)
         #t_spin = gtk.SpinButton(adj, 0, 0)
         #t_spin.set_numeric(t_spin)
-        t_selector = self.create_target_selector(target)
+        t_selector = self.create_target_selector(self.habit['target'])
         t_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         t_picker.set_title(_('Target'))
         t_picker.set_selector(t_selector)
-        table.attach(t_picker, 0, 1, 0, 1, gtk.FILL)
+        table.attach(t_picker, 0, 1, 0, 1)
+        t_selector.connect('changed', self.on_target_changed)
 
         #t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
         #t_entry.set_text(str(habit['target']))
@@ -651,62 +655,63 @@ class MainWindow:
         #table.attach(t_entry, 1, 2, 1, 2)
 
         # Habit measure
-        m_selector = self.create_measures_selector(measure)
+        m_selector = self.create_measures_selector(self.habit['measure_desc'])
         m_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         m_picker.set_title(_('Measure'))
         m_picker.set_selector(m_selector)
-        table.attach(m_picker, 1, 2, 0, 1, gtk.FILL)
+        #table.attach(m_picker, 1, 2, 0, 1, gtk.FILL)
+        table.attach(m_picker, 1, 2, 0, 1)
+        m_selector.connect('changed', self.on_measure_changed)
 
         # Habit interval type
-        it_selector = self.create_interval_type_selector(interval_code)
+        it_selector = self.create_interval_type_selector(self.habit['interval_code'])
         it_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         it_picker.set_title(_('Interval Type'))
         it_picker.set_selector(it_selector)
-        table.attach(it_picker, 0, 1, 1, 2, gtk.FILL)
+        table.attach(it_picker, 0, 1, 1, 2)
+        it_selector.connect('changed', self.on_interval_type_changed)
 
         # Habit interval
         int_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
 
-        if interval_code == 'DAY':
+        if self.habit['interval_code'] == 'DAY':
             # Allow limiting daily habit to specific days of the week
-            int_selector = self.create_limit_week_days_selector(limit_week_day_nums)
+            int_selector = self.create_limit_week_days_selector(self.habit['limit_week_day_nums'])
             int_picker.set_title(_('Days of Week'))
+            int_selector.connect('changed', self.on_limit_week_days_changed)
 
         else:
             # Selection of repeat interval for weekly/monthly habits
-            int_selector = self.create_interval_selector(interval)
+            int_selector = self.create_interval_selector(self.habit['interval'])
             int_picker.set_title(_('Interval'))
+            int_selector.connect('changed', self.on_interval_changed)
 
         int_picker.set_selector(int_selector)
-        table.attach(int_picker, 1, 2, 1, 2, gtk.FILL)
 
-        # Habit activity
-        a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        if activity and activity != '':
-            entry_text = activity
-        else:
-            entry_text = 'Describe activity here'
+        table.attach(int_picker, 1, 2, 1, 2)
 
-        a_entry.set_text(entry_text)
-        a_entry.set_position(len(entry_text))
-        table.attach(a_entry, 0, 1, 2, 3)
-
+        # Save button
         save_button = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
         save_button.set_label(_('Save'))
-        table.attach(save_button, 1, 2, 2, 3, gtk.FILL)
         save_button.connect('clicked', self.on_save_button_clicked)
 
         # Render
+        vbox.pack_start(a_entry, True, True, 0)
         vbox.pack_start(table, True, True, 0)
+        vbox.pack_start(save_button, True, True, 25)
 
-        st_win.add(vbox)
-        st_win.set_title(win_title)
-        st_win.show_all()
+        self.edit_win.add(vbox)
+        self.edit_win.set_title(win_title)
+        self.edit_win.show_all()
 
         
+    def on_activity_changed(self, widget):
+        self.habit['activity'] = widget.get_text()
+
+
     def create_target_selector(self, selected_target = None):
         selector = hildon.TouchSelector(text = True)
         for i in range(101):
@@ -716,12 +721,15 @@ class MainWindow:
         return selector
 
 
+    def on_target_changed(self, widget, user_data):
+        self.habit['target'] = widget.get_current_text()
+
+
     def create_measures_selector(self, selected_measure = None):
         measures = habitjewel_utils.get_measures_list(conn)
         selector = hildon.TouchSelector(text = True)
         index = 0
         for measure in measures:
-            print str(measure)
             selector.append_text(measure['desc'])
             if str(measure['desc']) == str(selected_measure):
                 selector.set_active(0, index)
@@ -729,17 +737,24 @@ class MainWindow:
         return selector
 
 
+    def on_measure_changed(self, widget, user_data):
+        self.habit['measure_desc'] = widget.get_current_text()
+
+
     def create_interval_type_selector(self, selected_interval_code = None):
         interval_types = habitjewel_utils.get_interval_types_list(conn)
         selector = hildon.TouchSelector(text = True)
         index = 0
         for interval_type in interval_types:
-            print str(interval_type)
             selector.append_text(interval_type['desc'])
             if str(interval_type['code']) == str(selected_interval_code):
                 selector.set_active(0, index)
             index += 1
         return selector
+
+
+    def on_interval_type_changed(self, widget, user_data):
+        self.habit['interval_code'] = widget.get_current_text()
 
 
     def create_interval_selector(self, selected_interval = None):
@@ -749,6 +764,10 @@ class MainWindow:
             if str(i) == str(selected_interval):
                 selector.set_active(0, i)
         return selector
+
+
+    def on_interval_changed(self, widget, user_data):
+        self.habit['interval'] = widget.get_current_text()
 
 
     def create_limit_week_days_selector(self, selected_days_of_week = None):
@@ -761,8 +780,39 @@ class MainWindow:
         return selector
 
 
-    def on_save_button_clicked():
-        return
+    def on_limit_week_days_changed(self, widget, user_data):
+        widget_text = widget.get_current_text()
+        selected_days = []
+        for i in range(7):
+            if widget_text.find(calendar.day_abbr[i]) != -1:
+                selected_days.append(str(i))
+        self.habit['limit_week_day_nums'] = ','.join(selected_days)
+
+
+    def on_save_button_clicked(self, widget):
+        valid = None
+        if self.habit['activity'] and \
+                self.habit['target'] and \
+                self.habit['measure_desc'] and \
+                self.habit['interval_code']:
+
+            if self.habit['interval_code'] == 'DAY' and \
+                    self.habit['limit_week_day_nums']:
+                valid = True
+            elif self.habit['interval']:
+                valid = True
+
+        if valid:
+            habitjewel_utils.save_habit(conn, self.habit)
+            self.edit_win.destroy()
+            self.show_info_banner(self.top_window, 'Habit "' + self.habit['activity'] + '" saved')
+            self.redraw_habit_list(self)
+        else:
+            self.show_info_banner (widget, 'Please ensure all fields are completed')
+
+
+    def show_info_banner(self, widget, msg):
+        hildon.hildon_banner_show_information(widget, 'qgn_note_infoprint', msg)
 
 
     def is_portrait(self):
