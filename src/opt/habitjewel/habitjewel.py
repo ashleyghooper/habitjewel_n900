@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.1.1'
+VERSION = '0.2.1'
 
 import datetime
 import calendar
@@ -302,16 +302,12 @@ class MainWindow:
         button.connect('clicked', self.new_habit)
         menu.append(button)
 
-        button = gtk.Button(_('Stats'))
-        button.connect('clicked', self.stats)
-        menu.append(button)
-
         button = gtk.Button(_('Go to Date'))
         button.connect('clicked', self.go_to_date)
         menu.append(button)
 
-        button = gtk.Button(_('Delete'))
-        button.connect('clicked', self.remove_habits)
+        button = gtk.Button(_('Stats'))
+        button.connect('clicked', self.stats)
         menu.append(button)
 
         button = gtk.Button(_('About'))
@@ -358,18 +354,58 @@ class MainWindow:
         self.redraw_habit_list(self)
 
 
-    def remove_habits(self, widget):
-        return
-
-
     def about(self, widget):
         st_win = hildon.StackableWindow()
         st_win.get_screen().connect('size-changed', self.orientation_changed)
-        vbox_about = gtk.VBox()
+        vbox = gtk.VBox()
+        pan = hildon.PannableArea()
+
         text = hildon.TextView()
-        text.set_placeholder('About page')
-        vbox_about.pack_start(text)
-        st_win.add(vbox_about)
+        text.set_wrap_mode(gtk.WRAP_WORD)
+        text.set_editable(False)
+        text.set_cursor_visible(False)
+        buf = text.get_buffer()
+        iter = buf.get_iter_at_offset(0)
+        i_tag = buf.create_tag('i', style=pango.STYLE_ITALIC)
+        b_tag = buf.create_tag('b', weight=pango.WEIGHT_BOLD)
+        buf.insert_with_tags(iter, 'HabitJewel', b_tag)
+        buf.insert(iter, ', copyright © Ashley Hooper, 2016\n\n')
+        buf.insert_with_tags(iter, 'HabitJewel', i_tag)
+        buf.insert(iter, ' tracks your desired habits and their fulfillment on a regular \
+basis, helping to motivate your self-improvement.\n\n')
+        buf.insert(iter, 'Habits are defined as follows:\n\n\
+* The activity (e.g. ')
+        buf.insert_with_tags(iter, 'Meditate', i_tag)
+        buf.insert(iter, ')\n\
+* The target for each repetition of the habit, e.g. 20 minutes\n\
+* The repetition interval, which determines how often you want to perform the habit\n\n\
+The repetition interval can be either:\n\
+a) ')
+        buf.insert_with_tags(iter, 'day-based', i_tag)
+        buf.insert(iter, ', repeating either every day or selected days of the week such \
+as Monday, Wednesday, Friday\n\
+b) ')
+        buf.insert_with_tags(iter, 'week-based', i_tag)
+        buf.insert(iter, ', repeating once for every ')
+        buf.insert_with_tags(iter, 'n', i_tag)
+        buf.insert(iter, 'weeks\n\
+c) ')
+        buf.insert_with_tags(iter, 'month-based', i_tag)
+        buf.insert(iter, ', repeating once for every ')
+        buf.insert_with_tags(iter, 'n', i_tag)
+        buf.insert(iter, ' months\n\n\
+After creating your habits they are displayed on the main page, along with \
+navigation buttons to go back or forward one day at a time. For each day, the \
+habits that would be current for that day are displayed. A checkbox allows \
+toggling the fulfillment status of each habit, either undetermined (empty \
+box), completed (green tick), or missed (red cross).\n\n\
+The status of a habit for the current day or any preceding day can be changed \
+at any time, but for reasons that should be obvious, the fulfillment status of \
+habits for future dates can not be set.')
+        text.set_buffer(buf)
+        pan.add(text)
+        vbox.pack_start(pan)
+        st_win.add(vbox)
         st_win.set_title('About HabitJewel')
         st_win.show_all()
 
@@ -630,8 +666,10 @@ class MainWindow:
 
         # Habit activity
         a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        a_entry.set_text(self.habit['activity'])
-        a_entry.set_position(len(self.habit['activity']))
+        a_entry.set_input_mode(gtk.HILDON_GTK_INPUT_MODE_ALPHA | gtk.HILDON_GTK_INPUT_MODE_NUMERIC)
+        a_entry.set_placeholder('Test placeholder')
+#        a_entry.set_text(self.habit['activity'])
+#        a_entry.set_position(len(self.habit['activity']))
         a_entry.connect('changed', self.on_activity_changed)
 
         # Habit target
