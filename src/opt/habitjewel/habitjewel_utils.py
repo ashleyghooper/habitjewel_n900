@@ -61,7 +61,16 @@ def get_habits_list(conn, view_date):
                      OR (   interval_code = 'MONTH'
                         AND STRFTIME('%M', ?) % interval = 0)
                     )
-            ORDER BY priority, h.activity
+            ORDER BY CASE
+                -- Sort unfulfilled or completed habits to bottom
+                WHEN interval_code = 'DAY'
+                    AND IFNULL(hsd.percent_complete, -1) NOT IN (0, 100) THEN 0
+                WHEN interval_code = 'WEEK'
+                    AND IFNULL(hsw.percent_complete, -1) NOT IN (0, 100) THEN 0
+                WHEN interval_code = 'MONTH'
+                    AND IFNULL(hsm.percent_complete, -1) NOT IN (0, 100) THEN 0
+                ELSE 1
+            END, priority, h.activity
         """, [view_date, view_date, view_date, view_date, view_date, \
                 view_date, view_date, \
                 '%' + view_week_day_num + '%', \

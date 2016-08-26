@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.2.2'
+VERSION = '0.2.3'
 
 import datetime
 import calendar
@@ -68,6 +68,10 @@ STATUS_FULFILLED_PCT    = 100
 STATUS_UNFULFILLED_PCT  = 0
 STATUS_UNKNOWN_PCT      = -1
 PIXBUF_FILE_FULFILLED   = "checkbox_checked.png"
+PIXBUF_FILE_80_PERCENT  = "checkbox_partial_80_pc.png"
+PIXBUF_FILE_60_PERCENT  = "checkbox_partial_60_pc.png"
+PIXBUF_FILE_40_PERCENT  = "checkbox_partial_40_pc.png"
+PIXBUF_FILE_20_PERCENT  = "checkbox_partial_20_pc.png"
 PIXBUF_FILE_UNFULFILLED = "checkbox_crossed.png"
 PIXBUF_FILE_UNKNOWN     = "checkbox_unchecked.png"
 
@@ -532,9 +536,39 @@ habits for future dates can not be set.')
         self.habit_list_menu = gtk.Menu()
         # "Emulate" hildon_gtk_menu_new
         self.habit_list_menu.set_name('hildon-context-sensitive-menu')
-        menu_item = gtk.MenuItem(_('Edit'))
-        self.habit_list_menu.append(menu_item)
-        menu_item.connect('activate', self.edit_habit, self.habit_list_tv)
+
+        menu_edit = gtk.MenuItem(_('Edit'))
+        self.habit_list_menu.append(menu_edit)
+        menu_edit.connect('activate', self.on_menu_edit_item_selected, self.habit_list_tv)
+
+        sep = gtk.SeparatorMenuItem()
+        self.habit_list_menu.append(sep)
+
+        menu_done = gtk.MenuItem(_('Done'))
+        self.habit_list_menu.append(menu_done)
+        menu_done.connect('activate', self.on_menu_done_item_selected, self.habit_list_tv)
+
+        menu_80pc = gtk.MenuItem(_('80%'))
+        self.habit_list_menu.append(menu_80pc)
+        menu_80pc.connect('activate', self.on_menu_80pc_item_selected, self.habit_list_tv)
+
+        menu_60pc = gtk.MenuItem(_('60%'))
+        self.habit_list_menu.append(menu_60pc)
+        menu_60pc.connect('activate', self.on_menu_60pc_item_selected, self.habit_list_tv)
+
+        menu_40pc = gtk.MenuItem(_('40%'))
+        self.habit_list_menu.append(menu_40pc)
+        menu_40pc.connect('activate', self.on_menu_40pc_item_selected, self.habit_list_tv)
+
+        menu_20pc = gtk.MenuItem(_('20%'))
+        self.habit_list_menu.append(menu_20pc)
+        menu_20pc.connect('activate', self.on_menu_20pc_item_selected, self.habit_list_tv)
+
+        menu_missed = gtk.MenuItem(_('Missed'))
+        self.habit_list_menu.append(menu_missed)
+        menu_80pc.connect('activate', self.on_menu_missed_item_selected, self.habit_list_tv)
+
+
         self.habit_list_menu.show_all()
         self.habit_list_tv.tap_and_hold_setup(self.habit_list_menu)
 
@@ -590,10 +624,18 @@ habits for future dates can not be set.')
             )
 
 
-    def get_pixbuf_filename_for_status(self, status):
-        if (status == STATUS_FULFILLED_PCT):
+    def get_pixbuf_filename_for_status(self, pct_complete):
+        if (pct_complete == STATUS_FULFILLED_PCT):
             icon_filename = PIXBUF_FILE_FULFILLED
-        elif (status == STATUS_UNFULFILLED_PCT):
+        elif (pct_complete == 80):
+            icon_filename = PIXBUF_FILE_80_PERCENT
+        elif (pct_complete == 60):
+            icon_filename = PIXBUF_FILE_60_PERCENT
+        elif (pct_complete == 40):
+            icon_filename = PIXBUF_FILE_40_PERCENT
+        elif (pct_complete == 20):
+            icon_filename = PIXBUF_FILE_20_PERCENT
+        elif (pct_complete == STATUS_UNFULFILLED_PCT):
             icon_filename = PIXBUF_FILE_UNFULFILLED
         else:
             icon_filename = PIXBUF_FILE_UNKNOWN
@@ -653,6 +695,7 @@ habits for future dates can not be set.')
         )
         model[iter][TV_HABIT_LIST_PIXBUF] = self.get_pixbuf_filename_for_status (percent_complete)
         model[iter][TV_HABIT_LIST_PCT_COMPLETE] = percent_complete
+        # Maybe set timeout to redraw the habit list a few seconds later?
 
 
     def prev_day(self, widget):
@@ -693,7 +736,7 @@ habits for future dates can not be set.')
         self.habit_edit_screen (widget)
 
 
-    def edit_habit (self, menu_item, widget):
+    def on_menu_edit_item_selected (self, menu_item, widget):
         if not self.touched_habit:
             return
         else:
@@ -701,7 +744,54 @@ habits for future dates can not be set.')
             self.habit_edit_screen (widget)
 
 
-    #TODO: Everything below here
+    def on_menu_done_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to done
+
+
+    def on_menu_80pc_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to 80%
+
+
+    def on_menu_60pc_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to 60%
+
+
+    def on_menu_40pc_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to 40%
+
+
+    def on_menu_20pc_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to 20%
+
+
+    def on_menu_missed_item_selected (self, menu_item, widget):
+        if not self.touched_habit:
+            return
+        else:
+            self.habit = self.touched_habit
+            # set status to 0%
+
+
     def habit_edit_screen(self, widget):
 
         # Get categories
