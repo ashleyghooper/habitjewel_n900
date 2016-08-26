@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.2.1'
+VERSION = '0.2.2'
 
 import datetime
 import calendar
@@ -35,6 +35,7 @@ import time
 
 from portrait import FremantleRotation
 from cell_renderer_clickable_pixbuf import CellRendererClickablePixbuf
+from dateutil.relativedelta import relativedelta
 
 import habitjewel_utils
 
@@ -232,8 +233,7 @@ class MainWindow:
         gettext.install('habitjewel','/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
-        today = datetime.date.today()
-        self.view_date = today
+        self.view_date = self.get_today()
 
         self.program = hildon.Program()
         self.program.__init__()
@@ -299,19 +299,19 @@ class MainWindow:
         menu = hildon.AppMenu()
 
         button = gtk.Button(_('New Habit'))
-        button.connect('clicked', self.new_habit)
+        button.connect('clicked', self.on_new_habit_menu_item_click)
         menu.append(button)
 
         button = gtk.Button(_('Go to Date'))
-        button.connect('clicked', self.go_to_date)
+        button.connect('clicked', self.on_go_to_date_menu_item_click)
         menu.append(button)
 
         button = gtk.Button(_('Stats'))
-        button.connect('clicked', self.stats)
+        button.connect('clicked', self.on_stats_menu_item_click)
         menu.append(button)
 
         button = gtk.Button(_('About'))
-        button.connect('clicked', self.about)
+        button.connect('clicked', self.on_about_menu_item_click)
         menu.append(button)
 
         # menu.connect('event', self.event_catcher)
@@ -320,41 +320,106 @@ class MainWindow:
         return menu
 
 
-    def stats(self, widget):
+    def on_stats_menu_item_click(self, widget):
         return
 
 
-    def go_to_date(self, widget):
+    def on_go_to_date_menu_item_click(self, widget):
         st_win = hildon.StackableWindow()
         st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox_cal = gtk.VBox()
-        cal = self.get_calendar(self, self.view_date)
-        vbox_cal.pack_start(cal, True, True) 
+        self.cal = self.get_calendar(self, self.view_date)
+        vbox_cal.pack_start(self.cal, True, True) 
+
+        hbox_cal_btns = gtk.HBox(True)
+
+        today_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_HORIZ)
+        today_btn.set_label(_('Today'))
+        today_btn.connect('clicked', self.on_cal_today_btn_click, st_win)
+        hbox_cal_btns.pack_start(today_btn, True, True) 
+
+        prev_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        prev_month_btn.set_label(_('Previous Month'))
+        prev_month_btn.connect('clicked', self.on_cal_prev_month_btn_click, st_win)
+        hbox_cal_btns.pack_start(prev_month_btn, True, True) 
+
+        next_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        next_month_btn.set_label(_('Next Month'))
+        next_month_btn.connect('clicked', self.on_cal_next_month_btn_click, st_win)
+        hbox_cal_btns.pack_start(next_month_btn, True, True) 
+
+        vbox_cal.pack_start(hbox_cal_btns, True, True)
+
         st_win.add(vbox_cal)
+
         st_win.set_title('Go to Date')
         st_win.show_all()
-        cal.connect('day_selected', self.calendar_date_selected, st_win)
+        self.cal.connect('day_selected', self.on_calendar_day_selected, st_win)
+
+
+    def get_today(self):
+        today = datetime.date.today()
+        return today
+        
+
+    def on_cal_today_btn_click(self, widget, st_win):
+        self.view_date = self.get_today()
+        st_win.destroy()
+        self.redraw_habit_list(self)
+
+
+    def get_prev_month_date(self, orig_dt):
+        # return datetime object original date + 1 month
+        return orig_dt - datetime.timedelta(1*365/12)
+
+
+    def on_cal_prev_month_btn_click(self, widget, st_win):
+        orig_dt = self.get_calendar_selected_date(self.cal)
+        new_dt = self.get_prev_month_date(orig_dt)
+        self.set_calendar_month(self.cal, new_dt)
+
+
+    def get_next_month_date(self, orig_dt):
+        # return datetime object original date - 1 month
+        return orig_dt + datetime.timedelta(1*365/12)
+
+
+    def on_cal_next_month_btn_click(self, widget, st_win):
+        orig_dt = self.get_calendar_selected_date(self.cal)
+        new_dt = self.get_next_month_date(orig_dt)
+        self.set_calendar_month(self.cal, new_dt)
+
+
+    def get_calendar_selected_date(self, cal):
+        year, month, day = cal.get_date()
+        month += 1
+        return datetime.datetime(year, month, day)
+
+
+    def set_calendar_month(self, cal, set_dt):
+        cal.select_month(set_dt.month - 1, set_dt.year)
 
 
     def get_calendar(self, widget, disp_date):
         #TODO: Increase size of calendar dates
         #TODO: Highlight days based on habit fulfillment
         cal = gtk.Calendar()
-        cal.detail_height_rows = 20
+        cal.detail_height_rows = 2
         cal.no_month_change = False
         cal.select_month(disp_date.month, disp_date.year)
         cal.select_day(disp_date.day)
         return cal
 
 
-    def calendar_date_selected(self, cal, st_win):
+    def on_calendar_day_selected(self, cal, st_win):
         year, month, day = cal.get_date()
+        print str(month)
         self.view_date = datetime.date(year, month, day)
         st_win.destroy()
         self.redraw_habit_list(self)
 
 
-    def about(self, widget):
+    def on_about_menu_item_click(self, widget):
         st_win = hildon.StackableWindow()
         st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox = gtk.VBox()
@@ -623,7 +688,7 @@ habits for future dates can not be set.')
         self.top_window.queue_draw()
 
 
-    def new_habit (self, widget):
+    def on_new_habit_menu_item_click (self, widget):
         self.habit = None
         self.habit_edit_screen (widget)
 
@@ -734,7 +799,7 @@ habits for future dates can not be set.')
         # Save button
         save_button = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
         save_button.set_label(_('Save'))
-        save_button.connect('clicked', self.on_save_button_clicked)
+        save_button.connect('clicked', self.on_save_btn_click)
 
         # Render
         vbox.pack_start(a_entry, True, True, 0)
@@ -827,7 +892,7 @@ habits for future dates can not be set.')
         self.habit['limit_week_day_nums'] = ','.join(selected_days)
 
 
-    def on_save_button_clicked(self, widget):
+    def on_save_btn_click(self, widget):
         valid = None
         if self.habit['activity'] and \
                 self.habit['target'] and \
