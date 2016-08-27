@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.2.3'
+VERSION = '0.2.4'
 
 import datetime
 import calendar
@@ -35,7 +35,6 @@ import time
 
 from portrait import FremantleRotation
 from cell_renderer_clickable_pixbuf import CellRendererClickablePixbuf
-from dateutil.relativedelta import relativedelta
 
 import habitjewel_utils
 
