@@ -59,20 +59,30 @@ OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 
 
 # Program constants
-TV_HABIT_LIST_ID           = 0
-TV_HABIT_LIST_DESC         = 1
-TV_HABIT_LIST_PCT_COMPLETE = 2
-TV_HABIT_LIST_PIXBUF       = 3
-TV_HABIT_LIST_INTVL_TYPE   = 4
-STATUS_FULFILLED_PCT    = 100
-STATUS_UNFULFILLED_PCT  = 0
+# Treeview column indexes and titles
+TV_HABIT_LIST_COL_NUM_ID             = 0
+TV_HABIT_LIST_COL_NAME_ID            = 'ID'
+TV_HABIT_LIST_COL_NUM_ACTIVITY       = 1
+TV_HABIT_LIST_COL_NAME_ACTIVITY      = 'Activity'
+TV_HABIT_LIST_COL_NUM_STATUS         = 2
+TV_HABIT_LIST_COL_NAME_STATUS        = 'Status'
+TV_HABIT_LIST_COL_NUM_PCT_COMPLETE   = 3
+TV_HABIT_LIST_COL_NAME_PCT_COMPLETE  = 'Percent complete'
+TV_HABIT_LIST_COL_NUM_INTVL_CODE     = 4
+TV_HABIT_LIST_COL_NAME_INTVL_CODE    = 'Interval type'
+
+# Habit status thresholds and pixbufs
+STATUS_DONE_PCT         = 100
+PIXBUF_FILE_DONE        = "checkbox_checked.png"
+STATUS_75_PCT           = 75
+PIXBUF_FILE_75_PERCENT  = "checkbox_partial_75_pct.png"
+STATUS_50_PCT           = 50
+PIXBUF_FILE_50_PERCENT  = "checkbox_partial_50_pct.png"
+STATUS_25_PCT           = 25
+PIXBUF_FILE_25_PERCENT  = "checkbox_partial_25_pct.png"
+STATUS_MISSED_PCT       = 0
+PIXBUF_FILE_MISSED      = "checkbox_crossed.png"
 STATUS_UNKNOWN_PCT      = -1
-PIXBUF_FILE_FULFILLED   = "checkbox_checked.png"
-PIXBUF_FILE_80_PERCENT  = "checkbox_partial_80_pc.png"
-PIXBUF_FILE_60_PERCENT  = "checkbox_partial_60_pc.png"
-PIXBUF_FILE_40_PERCENT  = "checkbox_partial_40_pc.png"
-PIXBUF_FILE_20_PERCENT  = "checkbox_partial_20_pc.png"
-PIXBUF_FILE_UNFULFILLED = "checkbox_crossed.png"
 PIXBUF_FILE_UNKNOWN     = "checkbox_unchecked.png"
 
 
@@ -237,7 +247,7 @@ class MainWindow:
         gettext.install('habitjewel','/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
-        self.view_date = self.get_today()
+        self.view_date = self.get_today_dt()
 
         self.program = hildon.Program()
         self.program.__init__()
@@ -259,8 +269,10 @@ class MainWindow:
 
         self.fontsize = 15
 
-        menu = self.make_menu()
+        menu = self.setup_main_menu()
         self.top_window.set_app_menu(menu)
+
+        self.setup_hildon_ui_manager()
 
         self.container = self.home_screen()
         self.top_window.add(self.container)
@@ -296,7 +308,7 @@ class MainWindow:
             self.button_size = BTN_SIZE_FINGER
 
 
-    def make_menu(self):
+    def setup_main_menu(self):
         """
         This is the menu for the main windows
         """
@@ -322,6 +334,56 @@ class MainWindow:
 
         menu.show_all()
         return menu
+
+
+    # Set up UI Manager/context menus
+    def setup_hildon_ui_manager(self):
+        self.h_ui_manager = gtk.UIManager()
+        h_ui_desc = """
+            <ui>
+              <popup name="habitcmenu" action="habitcmenu">
+                <menuitem action="edithabit"/>
+              </popup>
+              <popup name="statuscmenu" action="statuscmenu">
+                <menuitem action="habitdone"/>
+                <menuitem action="habit75pcdone"/>
+                <menuitem action="habit50pcdone"/>
+                <menuitem action="habit25pcdone"/>
+                <menuitem action="habitmissed"/>
+              </popup>
+            </ui>
+        """
+
+        # TODO: Mute habits menu option
+        """
+                <menuitem action="mutehabit"/>
+        """
+        """
+                ('mutehabit', None, _('Mute Habit'), None, None, self.on_habit_cmenu_mute_selected),
+        """
+
+        h_actions = (
+                ('edithabit', None, _('Edit Habit'), None, None, self.on_habit_cmenu_edit_selected),
+                ('habitdone', None, _('Done'), None, None, self.on_status_cmenu_done_selected),
+                ('habit75pcdone', None, _('75%'), None, None, self.on_status_cmenu_75pct_selected),
+                ('habit50pcdone', None, _('50%'), None, None, self.on_status_cmenu_50pct_selected),
+                ('habit25pcdone', None, _('25%'), None, None, self.on_status_cmenu_25pct_selected),
+                ('habitmissed', None, _('Missed'), None, None, self.on_status_cmenu_missed_selected),
+        )
+
+        h_action_group = gtk.ActionGroup('Actions')
+        h_action_group.add_actions(h_actions)
+        self.h_ui_manager.insert_action_group(h_action_group, 0)
+        self.h_ui_manager.add_ui_from_string(h_ui_desc)
+        # tap and hold on habit activity
+        self.h_habit_cmenu = self.h_ui_manager.get_widget('/habitcmenu')
+        # tap and hold on habit status (checkbox)
+        self.h_status_cmenu = self.h_ui_manager.get_widget('/statuscmenu')
+
+
+    def popup_hildon_menu(self, menu):
+        menu.popup(None, None, None, 3, 0)
+        menu.set_name('hildon-context-sensitive-menu')
 
 
     def on_stats_menu_item_click(self, widget):
@@ -361,40 +423,40 @@ class MainWindow:
         self.cal.connect('day_selected', self.on_calendar_day_selected, st_win)
 
 
-    def get_today(self):
+    def get_today_dt(self):
         today = datetime.date.today()
         return today
         
 
     def on_cal_today_btn_click(self, widget, st_win):
-        self.view_date = self.get_today()
+        self.view_date = self.get_today_dt()
         st_win.destroy()
-        self.redraw_habit_list(self)
+        self.redraw_habit_list(widget)
 
 
-    def get_prev_month_date(self, orig_dt):
+    def get_prev_month_date_dt(self, orig_dt):
         # return datetime object original date + 1 month
         return orig_dt - datetime.timedelta(1*365/12)
 
 
     def on_cal_prev_month_btn_click(self, widget, st_win):
-        orig_dt = self.get_calendar_selected_date(self.cal)
-        new_dt = self.get_prev_month_date(orig_dt)
+        orig_dt = self.get_calendar_selected_date_dt(self.cal)
+        new_dt = self.get_prev_month_date_dt(orig_dt)
         self.set_calendar_month(self.cal, new_dt)
 
 
-    def get_next_month_date(self, orig_dt):
+    def get_next_month_date_dt(self, orig_dt):
         # return datetime object original date - 1 month
         return orig_dt + datetime.timedelta(1*365/12)
 
 
     def on_cal_next_month_btn_click(self, widget, st_win):
-        orig_dt = self.get_calendar_selected_date(self.cal)
-        new_dt = self.get_next_month_date(orig_dt)
+        orig_dt = self.get_calendar_selected_date_dt(self.cal)
+        new_dt = self.get_next_month_date_dt(orig_dt)
         self.set_calendar_month(self.cal, new_dt)
 
 
-    def get_calendar_selected_date(self, cal):
+    def get_calendar_selected_date_dt(self, cal):
         year, month, day = cal.get_date()
         month += 1
         return datetime.datetime(year, month, day)
@@ -420,7 +482,7 @@ class MainWindow:
         print str(month)
         self.view_date = datetime.date(year, month, day)
         st_win.destroy()
-        self.redraw_habit_list(self)
+        self.redraw_habit_list(widget)
 
 
     def on_about_menu_item_click(self, widget):
@@ -532,45 +594,8 @@ habits for future dates can not be set.')
 
         self.habit_list_tv.connect('button-press-event', self.on_habit_list_button_press)
 
-        # "Long press" context menu
-        self.habit_list_menu = gtk.Menu()
-        # "Emulate" hildon_gtk_menu_new
-        self.habit_list_menu.set_name('hildon-context-sensitive-menu')
-
-        menu_edit = gtk.MenuItem(_('Edit'))
-        self.habit_list_menu.append(menu_edit)
-        menu_edit.connect('activate', self.on_menu_edit_item_selected, self.habit_list_tv)
-
-        sep = gtk.SeparatorMenuItem()
-        self.habit_list_menu.append(sep)
-
-        menu_done = gtk.MenuItem(_('Done'))
-        self.habit_list_menu.append(menu_done)
-        menu_done.connect('activate', self.on_menu_done_item_selected, self.habit_list_tv)
-
-        menu_80pc = gtk.MenuItem(_('80%'))
-        self.habit_list_menu.append(menu_80pc)
-        menu_80pc.connect('activate', self.on_menu_80pc_item_selected, self.habit_list_tv)
-
-        menu_60pc = gtk.MenuItem(_('60%'))
-        self.habit_list_menu.append(menu_60pc)
-        menu_60pc.connect('activate', self.on_menu_60pc_item_selected, self.habit_list_tv)
-
-        menu_40pc = gtk.MenuItem(_('40%'))
-        self.habit_list_menu.append(menu_40pc)
-        menu_40pc.connect('activate', self.on_menu_40pc_item_selected, self.habit_list_tv)
-
-        menu_20pc = gtk.MenuItem(_('20%'))
-        self.habit_list_menu.append(menu_20pc)
-        menu_20pc.connect('activate', self.on_menu_20pc_item_selected, self.habit_list_tv)
-
-        menu_missed = gtk.MenuItem(_('Missed'))
-        self.habit_list_menu.append(menu_missed)
-        menu_80pc.connect('activate', self.on_menu_missed_item_selected, self.habit_list_tv)
-
-
-        self.habit_list_menu.show_all()
-        self.habit_list_tv.tap_and_hold_setup(self.habit_list_menu)
+        self.habit_list_tv.tap_and_hold_setup(None)
+        self.habit_list_tv.connect('tap-and-hold', self.on_habit_tv_habit_tap_and_hold)
 
         self.pan_area.add(self.habit_list_tv)
 
@@ -580,13 +605,26 @@ habits for future dates can not be set.')
         return self.vbox_outer
 
 
+    def on_habit_tv_habit_tap_and_hold(self, widget):
+        if not self.touched_tv_col_title:
+            return
+        if self.touched_tv_col_title == TV_HABIT_LIST_COL_NAME_ACTIVITY:
+            gobject.idle_add(self.popup_hildon_menu, self.h_habit_cmenu)
+        elif self.touched_tv_col_title == TV_HABIT_LIST_COL_NAME_STATUS:
+            gobject.idle_add(self.popup_hildon_menu, self.h_status_cmenu)
+
+
     def on_habit_list_button_press(self, widget, event):
         result = self.habit_list_tv.get_path_at_pos(int(event.x), int(event.y))
         if result is not None:
             path, column, x, y = result
+
+            self.touched_tv_col_title = column.get_title()
+
             model = self.habit_list_tv.get_model()
-            index = model.get_value(model.get_iter(path), TV_HABIT_LIST_ID)
-            # There's got to be a more efficient way of doing this
+            index = model.get_value(model.get_iter(path), TV_HABIT_LIST_COL_NUM_ID)
+            # Look up the habit in the array of habits by its id
+            # (there's got to be a more efficient way of doing this!)
             for habit in self.habit_list:
                 if habit['id'] == index:
                     self.touched_habit = habit
@@ -596,7 +634,7 @@ habits for future dates can not be set.')
 
 
     def create_habit_list_model(self, widget):
-        lstore = gtk.ListStore(int, str, int, gtk.gdk.Pixbuf, str)
+        lstore = gtk.ListStore(int, str, gtk.gdk.Pixbuf, int, str)
         # add columns to the tree view
         self.add_columns_to_habit_list(self.habit_list_tv)
         return lstore
@@ -610,33 +648,31 @@ habits for future dates can not be set.')
             icon_pixbuf = self.get_pixbuf_filename_for_status (item['pct_complete'])
  
             self.habit_list_model.set(lstore_iter, \
-                TV_HABIT_LIST_ID, \
+                TV_HABIT_LIST_COL_NUM_ID, \
                     item['id'], \
-                TV_HABIT_LIST_DESC, \
+                TV_HABIT_LIST_COL_NUM_ACTIVITY, \
                     '<b>' + item['activity'] + '</b> ' + str(item['target_desc']) \
                     + ' <i>' + item['by_when'] + '</i>', \
-                TV_HABIT_LIST_PCT_COMPLETE, \
-                    item['pct_complete'], \
-                TV_HABIT_LIST_PIXBUF, \
+                TV_HABIT_LIST_COL_NUM_STATUS, \
                     icon_pixbuf, \
-                TV_HABIT_LIST_INTVL_TYPE, \
+                TV_HABIT_LIST_COL_NUM_PCT_COMPLETE, \
+                    item['pct_complete'], \
+                TV_HABIT_LIST_COL_NUM_INTVL_CODE, \
                     item['interval_code'] \
             )
 
 
     def get_pixbuf_filename_for_status(self, pct_complete):
-        if (pct_complete == STATUS_FULFILLED_PCT):
-            icon_filename = PIXBUF_FILE_FULFILLED
-        elif (pct_complete == 80):
-            icon_filename = PIXBUF_FILE_80_PERCENT
-        elif (pct_complete == 60):
-            icon_filename = PIXBUF_FILE_60_PERCENT
-        elif (pct_complete == 40):
-            icon_filename = PIXBUF_FILE_40_PERCENT
-        elif (pct_complete == 20):
-            icon_filename = PIXBUF_FILE_20_PERCENT
-        elif (pct_complete == STATUS_UNFULFILLED_PCT):
-            icon_filename = PIXBUF_FILE_UNFULFILLED
+        if (pct_complete >= STATUS_DONE_PCT):
+            icon_filename = PIXBUF_FILE_DONE
+        elif (pct_complete >= STATUS_75_PCT):
+            icon_filename = PIXBUF_FILE_75_PERCENT
+        elif (pct_complete >= STATUS_50_PCT):
+            icon_filename = PIXBUF_FILE_50_PERCENT
+        elif (pct_complete >= STATUS_25_PCT):
+            icon_filename = PIXBUF_FILE_25_PERCENT
+        elif (pct_complete == STATUS_MISSED_PCT):
+            icon_filename = PIXBUF_FILE_MISSED
         else:
             icon_filename = PIXBUF_FILE_UNKNOWN
 
@@ -645,7 +681,7 @@ habits for future dates can not be set.')
 
     def add_columns_to_habit_list(self, treeview):
         # column for ID
-        column = gtk.TreeViewColumn('ID', gtk.CellRendererText(), text=TV_HABIT_LIST_ID)
+        column = gtk.TreeViewColumn(TV_HABIT_LIST_COL_NAME_ID, gtk.CellRendererText(), text=TV_HABIT_LIST_COL_NUM_ID)
         column.set_visible(False)
         treeview.append_column(column)
 
@@ -653,23 +689,26 @@ habits for future dates can not be set.')
         renderer = gtk.CellRendererText()
         renderer.set_property('wrap-mode', gtk.WRAP_WORD)
         renderer.set_property('wrap-width', self.line_wrap_width)
-        column = gtk.TreeViewColumn('Habit activity', renderer, markup=TV_HABIT_LIST_DESC)
+        column = gtk.TreeViewColumn(TV_HABIT_LIST_COL_NAME_ACTIVITY, renderer, markup=TV_HABIT_LIST_COL_NUM_ACTIVITY)
         column.set_property('expand', True)
+        #column.tap_and_hold_setup(self.habit_list_menu)
         treeview.append_column(column)
 
         # column for checkbox
         checkbox = CellRendererClickablePixbuf()
         checkbox.connect('clicked', self.habit_toggled, treeview)
-        column = gtk.TreeViewColumn('Status', checkbox, pixbuf=TV_HABIT_LIST_PIXBUF)
+        column = gtk.TreeViewColumn(TV_HABIT_LIST_COL_NAME_STATUS, checkbox, pixbuf=TV_HABIT_LIST_COL_NUM_STATUS)
+        column.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
+        column.set_fixed_width(80)
         treeview.append_column(column)
 
         # column for percent complete
-        column = gtk.TreeViewColumn('Percent complete', gtk.CellRendererText(), text=TV_HABIT_LIST_PCT_COMPLETE)
+        column = gtk.TreeViewColumn(TV_HABIT_LIST_COL_NAME_PCT_COMPLETE, gtk.CellRendererText(), text=TV_HABIT_LIST_COL_NUM_PCT_COMPLETE)
         column.set_visible(False)
         treeview.append_column(column)
 
         # column for interval type
-        #column = gtk.TreeViewColumn('Interval type', gtk.CellRendererText(), text=4)
+        #column = gtk.TreeViewColumn(TV_HABIT_LIST_COL_NAME_INTVL_CODE, gtk.CellRendererText(), text=TV_HABIT_LIST_COL_NUM_INTVL_CODE)
         #column.set_visible(False)
         #treeview.append_column(column)
 
@@ -678,34 +717,40 @@ habits for future dates can not be set.')
         # Toggle habit completion status (fulfilled / unfulfilled / unknown)
         model = treeview.get_model()
         iter = model.get_iter(row_num)
-        current_status_pct = model[iter][TV_HABIT_LIST_PCT_COMPLETE]
+        current_status_pct = model[iter][TV_HABIT_LIST_COL_NUM_PCT_COMPLETE]
 
-        if (current_status_pct == STATUS_FULFILLED_PCT):
-            percent_complete = STATUS_UNFULFILLED_PCT
-        elif (current_status_pct == STATUS_UNFULFILLED_PCT):
+        if (current_status_pct >= STATUS_DONE_PCT):
+            percent_complete = STATUS_MISSED_PCT
+        elif (current_status_pct == STATUS_MISSED_PCT):
             percent_complete = STATUS_UNKNOWN_PCT
         else:
-            percent_complete = STATUS_FULFILLED_PCT
+            percent_complete = STATUS_DONE_PCT
 
-        habitjewel_utils.set_fulfillment_status (conn, \
-            model[iter][TV_HABIT_LIST_ID], \
-            model[iter][TV_HABIT_LIST_INTVL_TYPE], \
-            self.view_date, \
-            percent_complete \
+        self.set_habit_percent_complete (model[iter][TV_HABIT_LIST_COL_NUM_ID], \
+                self.view_date,
+                percent_complete
         )
-        model[iter][TV_HABIT_LIST_PIXBUF] = self.get_pixbuf_filename_for_status (percent_complete)
-        model[iter][TV_HABIT_LIST_PCT_COMPLETE] = percent_complete
+        model[iter][TV_HABIT_LIST_COL_NUM_STATUS] = self.get_pixbuf_filename_for_status (percent_complete)
+        model[iter][TV_HABIT_LIST_COL_NUM_PCT_COMPLETE] = percent_complete
         # Maybe set timeout to redraw the habit list a few seconds later?
+
+
+    def set_habit_percent_complete (self, habit_id, view_date, percent_complete):
+        habitjewel_utils.set_habit_pct_complete (conn, \
+                habit_id, \
+                view_date, \
+                percent_complete \
+        )
 
 
     def prev_day(self, widget):
         self.view_date = self.view_date - datetime.timedelta(days=1)
-        self.redraw_habit_list(self)
+        self.redraw_habit_list(widget)
 
 
     def next_day(self, widget):
         self.view_date = self.view_date + datetime.timedelta(days=1)
-        self.redraw_habit_list(self)
+        self.redraw_habit_list(widget)
 
 
     def get_date_label_text(self, widget):
@@ -718,7 +763,7 @@ habits for future dates can not be set.')
         self.date_label.set_text(label_text)
         self.habit_list_model.clear()
         self.prepare_habit_list(self)
-        checkbox_col = self.habit_list_tv.get_column(2)
+        checkbox_col = self.habit_list_tv.get_column(TV_HABIT_LIST_COL_NUM_STATUS)
         today = datetime.date.today()
         if (self.view_date <= today):
             checkbox_col.set_visible(True)
@@ -733,66 +778,60 @@ habits for future dates can not be set.')
 
     def on_new_habit_menu_item_click (self, widget):
         self.habit = None
-        self.habit_edit_screen (widget)
+        self.habit_edit_dlg (widget)
 
 
-    def on_menu_edit_item_selected (self, menu_item, widget):
+    def on_habit_cmenu_edit_selected (self, action):
         if not self.touched_habit:
             return
         else:
             self.habit = self.touched_habit
-            self.habit_edit_screen (widget)
+            # Can this be changed to pass habit to below func?
+            self.habit_edit_dlg ()
 
 
-    def on_menu_done_item_selected (self, menu_item, widget):
+    def on_status_cmenu_pct_selected (self, pct_complete):
+        habit = self.touched_habit
+        self.set_habit_percent_complete(habit['id'], self.view_date, pct_complete)
+        self.redraw_habit_list(self)
+
+
+    def on_status_cmenu_done_selected (self, action):
         if not self.touched_habit:
             return
         else:
-            self.habit = self.touched_habit
-            # set status to done
+            self.on_status_cmenu_pct_selected (100)
 
 
-    def on_menu_80pc_item_selected (self, menu_item, widget):
+    def on_status_cmenu_75pct_selected (self, menu_item):
         if not self.touched_habit:
             return
         else:
-            self.habit = self.touched_habit
-            # set status to 80%
+            self.on_status_cmenu_pct_selected (75)
 
 
-    def on_menu_60pc_item_selected (self, menu_item, widget):
+    def on_status_cmenu_50pct_selected (self, menu_item):
         if not self.touched_habit:
             return
         else:
-            self.habit = self.touched_habit
-            # set status to 60%
+            self.on_status_cmenu_pct_selected (50)
 
 
-    def on_menu_40pc_item_selected (self, menu_item, widget):
+    def on_status_cmenu_25pct_selected (self, menu_item):
         if not self.touched_habit:
             return
         else:
-            self.habit = self.touched_habit
-            # set status to 40%
+            self.on_status_cmenu_pct_selected (25)
 
 
-    def on_menu_20pc_item_selected (self, menu_item, widget):
+    def on_status_cmenu_missed_selected (self, menu_item):
         if not self.touched_habit:
             return
         else:
-            self.habit = self.touched_habit
-            # set status to 20%
+            self.on_status_cmenu_pct_selected (0)
 
 
-    def on_menu_missed_item_selected (self, menu_item, widget):
-        if not self.touched_habit:
-            return
-        else:
-            self.habit = self.touched_habit
-            # set status to 0%
-
-
-    def habit_edit_screen(self, widget):
+    def habit_edit_dlg(self):
 
         # Get categories
         categories = habitjewel_utils.get_categories_list(conn)
@@ -822,9 +861,10 @@ habits for future dates can not be set.')
         # Habit activity
         a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
         a_entry.set_input_mode(gtk.HILDON_GTK_INPUT_MODE_ALPHA | gtk.HILDON_GTK_INPUT_MODE_NUMERIC)
-        a_entry.set_placeholder('Test placeholder')
-#        a_entry.set_text(self.habit['activity'])
-#        a_entry.set_position(len(self.habit['activity']))
+        # set_placeholder doesn't work for some reason (displays only briefly)
+        # a_entry.set_placeholder('Test placeholder')
+        a_entry.set_text(self.habit['activity'])
+        a_entry.set_position(len(self.habit['activity']))
         a_entry.connect('changed', self.on_activity_changed)
 
         # Habit target
@@ -889,7 +929,7 @@ habits for future dates can not be set.')
         # Save button
         save_button = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
         save_button.set_label(_('Save'))
-        save_button.connect('clicked', self.on_save_btn_click)
+        save_button.connect('clicked', self.on_save_habit_btn_click)
 
         # Render
         vbox.pack_start(a_entry, True, True, 0)
@@ -982,7 +1022,7 @@ habits for future dates can not be set.')
         self.habit['limit_week_day_nums'] = ','.join(selected_days)
 
 
-    def on_save_btn_click(self, widget):
+    def on_save_habit_btn_click(self, widget):
         valid = None
         if self.habit['activity'] and \
                 self.habit['target'] and \
@@ -999,7 +1039,7 @@ habits for future dates can not be set.')
             habitjewel_utils.save_habit(conn, self.habit)
             self.edit_win.destroy()
             self.show_info_banner(self.top_window, 'Habit "' + self.habit['activity'] + '" saved')
-            self.redraw_habit_list(self)
+            self.redraw_habit_list(widget)
         else:
             self.show_info_banner (widget, 'Please ensure all fields are completed')
 

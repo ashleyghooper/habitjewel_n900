@@ -10,7 +10,9 @@ horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
 ##Return the details of all the habits in the database
 ##return a list similar to [(1, 'Meditate', 'minutes', 'minute', 'minutes', 30, ... )]
 def get_habits_list(conn, view_date):
-    view_week_day_num = view_date.strftime("%w")
+
+    # Convert between python datetime (sunday=0) and gtk calendar (monday=0)
+    view_week_day_num = str((int(view_date.strftime("%w")) + 7 - 1) % 7)
 
     habits_list=[]
 
@@ -110,6 +112,7 @@ def save_habit(conn, habit):
     interval = habit['interval']
     limit_week_day_nums = habit['limit_week_day_nums']
 
+    # Do we already have a habit id? i.e. editing existing habit
     if 'id' in habit:
         habit_id = habit['id']
 
@@ -124,6 +127,7 @@ def save_habit(conn, habit):
                     interval_code, interval, limit_week_day_nums, \
                     habit_id])
 
+    # If not, insert a new habit
     else:
 
         conn.execute(
@@ -212,7 +216,7 @@ def get_categories_list(conn):
 
 
 def get_habit_details(conn, habit_id):
-    habit = conn.execute(
+    cursor = conn.execute(
         """
         SELECT DISTINCT h.id, h.activity, unit, plural, target,
             target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS goal,
@@ -225,19 +229,29 @@ def get_habit_details(conn, habit_id):
             WHERE habit_id = ?
         """, [habit_id]
     )
+
+    habit = cursor.fetchone()
     
     return habit
 
 
-def set_fulfillment_status (conn, habit_id, interval_code, view_date, percent):
-    if (interval_code == 'DAY'):
+def set_habit_pct_complete (conn, habit_id, view_date, percent):
+    cursor = conn.execute(
+        """
+        SELECT interval_code FROM habits WHERE id = ?
+        """, [habit_id]
+    )
+    interval_code = cursor.fetchone()[0]
+
+    if interval_code == 'DAY':
         conn.execute(
             """
             INSERT OR REPLACE INTO history (id, habit_id, date, percent_complete)
                 VALUES ((SELECT id FROM history WHERE habit_id = ? AND date = ?),
                     ?, ?, ?)
             """, [habit_id, view_date, habit_id, view_date, percent])
-    else:
+        conn.commit()
+    elif interval_code == 'WEEK' or interval_code == 'MONTH':
         conn.execute(
             """
             INSERT OR REPLACE INTO history (id, habit_id, date, percent_complete)
@@ -246,4 +260,4 @@ def set_fulfillment_status (conn, habit_id, interval_code, view_date, percent):
                             AND STRFTIME('%W', date) = STRFTIME('%W', ?)),
                     ?, DATE(?, 'weekday 0', '-6 day'), ?)
             """, [habit_id, view_date, habit_id, view_date, percent])
-    conn.commit()
+        conn.commit()
