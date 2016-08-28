@@ -167,6 +167,8 @@ def save_habit(conn, habit):
     interval_code = habit['interval_code']
     interval = habit['interval']
     limit_week_day_nums = habit['limit_week_day_nums']
+    paused_until_date = habit['paused_until_date']
+    deleted_date = habit['deleted_date']
 
     # Do we already have a habit id? i.e. editing existing habit
     if 'id' in habit:
@@ -178,10 +180,11 @@ def save_habit(conn, habit):
                SET activity = ?, target = ?,
                        measure_id = (SELECT id FROM measures WHERE desc = ?),
                        interval_code = ?, interval = ?, limit_week_day_nums = ?,
-                       paused_until 
+                       paused_until_date = ?, deleted_date = ?
              WHERE id = ?
             """, [activity, target, measure_desc, \
                     interval_code, interval, limit_week_day_nums, \
+                    paused_until_date, deleted_date, \
                     habit_id])
 
     # If not, insert a new habit
