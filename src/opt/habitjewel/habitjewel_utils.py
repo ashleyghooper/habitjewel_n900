@@ -3,16 +3,14 @@
 import gtk, gobject
 import os
 import hildon
+import datetime
 
-fhsize = gtk.HILDON_SIZE_FINGER_HEIGHT
-horbtn = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
-
-##Return the details of all the habits in the database
+##Return the details of all habits for the current view date
 ##return a list similar to [(1, 'Meditate', 'minutes', 'minute', 'minutes', 30, ... )]
-def get_habits_list(conn, view_date):
+def get_habits_list_for_date(conn, view_date_dt):
 
     # Convert between python datetime (sunday=0) and gtk calendar (monday=0)
-    view_week_day_num = str((int(view_date.strftime("%w")) + 7 - 1) % 7)
+    view_week_day_num = str((int(view_date_dt.strftime("%w")) + 7 - 1) % 7)
 
     habits_list=[]
 
@@ -38,7 +36,10 @@ def get_habits_list(conn, view_date):
                 WHEN 'WEEK' THEN IFNULL(points * hsw.percent_complete, 0)
                 ELSE IFNULL(points * hsm.percent_complete, 0)
             END AS score,
-            priority
+            priority,
+            h.created_date,
+            paused_until_date,
+            h.deleted_date
             FROM habits h
                 JOIN measures m
                     ON m.id = h.measure_id
@@ -52,7 +53,8 @@ def get_habits_list(conn, view_date):
                     ON hsm.habit_id = h.id
                          AND STRFTIME('%M', hsm.date) = STRFTIME('%M', ?)
             WHERE IFNULL(h.created_date, ?) <= ?
-                AND IFNULL(h.deleted_date, ?) >= ?
+                AND IFNULL(h.paused_until_date, ?) <= ?
+                AND IFNULL(h.deleted_date, ?) > ?
                 AND (
                         (   interval_code = 'DAY'
                         AND (   limit_week_day_nums IS NULL
@@ -73,10 +75,16 @@ def get_habits_list(conn, view_date):
                     AND IFNULL(hsm.percent_complete, -1) NOT IN (0, 100) THEN 0
                 ELSE 1
             END, priority, h.activity
-        """, [view_date, view_date, view_date, view_date, view_date, \
-                view_date, view_date, \
-                '%' + view_week_day_num + '%', \
-                view_date, view_date]
+        """, [view_date_dt,   # join hsd
+                view_date_dt, # join hsw
+                view_date_dt, # join hsm
+                view_date_dt, view_date_dt, # created date
+                view_date_dt, view_date_dt, # paused until date
+                view_date_dt + datetime.timedelta(days=1), view_date_dt, # deleted date
+                '%' + view_week_day_num + '%', # limit week day nums
+                view_date_dt, # weekly interval
+                view_date_dt  # monthly interval
+                ]
     ):
 
         # habits_list.append(row)
@@ -96,7 +104,55 @@ def get_habits_list(conn, view_date):
             'points':               row[11], \
             'pct_complete':         row[12], \
             'score':                row[13], \
-            'priority':             row[14] \
+            'priority':             row[14], \
+            'created_date':         row[15], \
+            'paused_until_date':    row[16], \
+            'deleted_date':         row[17] \
+        }
+        habits_list.append(habit)
+
+    return habits_list
+
+
+def get_habits_list_all(conn):
+
+    habits_list=[]
+
+    for row in conn.execute(
+        """
+        SELECT DISTINCT h.id, h.activity, m.desc, unit, plural, target,
+            target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS target_desc,
+            interval_code, interval,
+            limit_week_day_nums,
+            points, 
+            priority,
+            h.created_date,
+            paused_until_date,
+            h.deleted_date
+            FROM habits h
+                JOIN measures m
+                    ON m.id = h.measure_id
+        """, []
+    ):
+
+        # habits_list.append(row)
+
+        habit = { \
+            'id':                   row[0], \
+            'activity':             row[1], \
+            'measure_desc':         row[2], \
+            'unit':                 row[3], \
+            'plural':               row[4], \
+            'target':               row[5], \
+            'target_desc':          row[6], \
+            'interval_code':        row[7], \
+            'interval':             row[8], \
+            'limit_week_day_nums':  row[9], \
+            'points':               row[10], \
+            'priority':             row[11], \
+            'created_date':         row[12], \
+            'paused_until_date':    row[13], \
+            'deleted_date':         row[14] \
         }
         habits_list.append(habit)
 
@@ -119,9 +175,10 @@ def save_habit(conn, habit):
         conn.execute(
             """
             UPDATE habits
-               SET activity = ?, target = ?, \
-                       measure_id = (SELECT id FROM measures WHERE desc = ?), \
-                       interval_code = ?, interval = ?, limit_week_day_nums = ? \
+               SET activity = ?, target = ?,
+                       measure_id = (SELECT id FROM measures WHERE desc = ?),
+                       interval_code = ?, interval = ?, limit_week_day_nums = ?,
+                       paused_until 
              WHERE id = ?
             """, [activity, target, measure_desc, \
                     interval_code, interval, limit_week_day_nums, \
@@ -132,7 +189,7 @@ def save_habit(conn, habit):
 
         conn.execute(
             """
-            INSERT INTO habits (activity, target, measure_id, interval_code, \
+            INSERT INTO habits (activity, target, measure_id, interval_code,
                     interval, limit_week_day_nums, created_date)
                 VALUES (?, ?, (SELECT id FROM measures WHERE desc = ?),
                     ?, ?, ?, CURRENT_DATE)
@@ -223,6 +280,9 @@ def get_habit_details(conn, habit_id):
             interval_code,
             interval,
             m.id, m.desc, m.unit, m.plural,
+            created_date,
+            paused_until_date,
+            deleted_date
             FROM habits h
                 JOIN measures m
                     ON m.id = h.measure_id
@@ -235,7 +295,7 @@ def get_habit_details(conn, habit_id):
     return habit
 
 
-def set_habit_pct_complete (conn, habit_id, view_date, percent):
+def set_habit_pct_complete (conn, habit_id, view_date_dt, percent):
     cursor = conn.execute(
         """
         SELECT interval_code FROM habits WHERE id = ?
@@ -249,7 +309,7 @@ def set_habit_pct_complete (conn, habit_id, view_date, percent):
             INSERT OR REPLACE INTO history (id, habit_id, date, percent_complete)
                 VALUES ((SELECT id FROM history WHERE habit_id = ? AND date = ?),
                     ?, ?, ?)
-            """, [habit_id, view_date, habit_id, view_date, percent])
+            """, [habit_id, view_date_dt, habit_id, view_date_dt, percent])
         conn.commit()
     elif interval_code == 'WEEK' or interval_code == 'MONTH':
         conn.execute(
@@ -259,5 +319,25 @@ def set_habit_pct_complete (conn, habit_id, view_date, percent):
                             WHERE habit_id = ?
                             AND STRFTIME('%W', date) = STRFTIME('%W', ?)),
                     ?, DATE(?, 'weekday 0', '-6 day'), ?)
-            """, [habit_id, view_date, habit_id, view_date, percent])
+            """, [habit_id, view_date_dt, habit_id, view_date_dt, percent])
         conn.commit()
+
+
+def set_habit_paused_until_date (conn, habit_id, paused_until_date):
+    conn.execute(
+        """
+        UPDATE habits
+           SET paused_until_date = ?
+         WHERE id = ?
+        """, [paused_until_date, habit_id])
+    conn.commit()
+
+
+def delete_habit (conn, habit_id):
+    conn.execute(
+        """
+        UPDATE habits
+           SET deleted_date = CURRENT_DATE
+         WHERE id = ?
+        """, [habit_id])
+    conn.commit()
