@@ -18,17 +18,21 @@ cd $local_project_path
 
 echo "Waiting for file updates in $local_project_path to deploy to $remote_host"
 
-inotifywait -r -mq --timefmt '%d/%m/%y %H:%M' --format '%T %w %f %e' \
-    -e modify . --exclude '(.*\.sw.|\.git)' | while read date time dir file event
+inotifywait -r -mq --timefmt '%s' --format '%T %w %f %e' \
+    -e modify . --exclude '(.*\.sw.|\.git)' | while read epoch dir file event
 do
     event=${event}
     affected_file=${dir}${file}
-    event_epoch=$(date +%s)
+    event_epoch=${epoch}
     difference=$(expr $event_epoch - $last_event_epoch)
+    date=$(date +%d/%m/%Y)
+    time=$(date +%H:%M:%S)
     if [ $difference -gt 2 ]; then
-        last_event_epoch=$(date +%s)
+        last_event_epoch=${event_epoch}
         scp $affected_file $remote_host:$remote_project_path/${dir}
         ssh -f $remote_host "source /etc/osso-af-init/af-defines.sh && /bin/sh $remote_project_path/auto_restart.sh"
         echo "At ${time} on ${date}, file ${file} was copied to $remote_host"
+    else
+        echo "Ignoring duplicate event!"
     fi
 done

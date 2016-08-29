@@ -20,10 +20,10 @@ import glob,os
 for fpath in glob.glob('*/*.py[c|o]'):
     os.remove(fpath)
  
-changes = '* Most basic functionality working'
+changes = '* Added partial fulfillment of habits'
  
 setup(name='habitjewel',
-      version='0.2.0',
+      version='0.2.3',
       license='GNU GPLv3',
       description='Record and track your progress in achieving your daily habits.',
       long_description='HabitJewel is an application to track regular habits and their accomplishment. It allows habits that should repeat daily, or on specific days of the week, as well as habits that repeat each week, or some number of weeks. Ultimately it will keep track of accomplishment of the habits, award points, and allow some statistics and graphing.',
