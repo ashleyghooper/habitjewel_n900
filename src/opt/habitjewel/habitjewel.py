@@ -20,6 +20,8 @@
 
 """
 CHANGELOG:
+* Removed window stack, tried various ways to only handle rotation for visible window,
+  but failed so reverted to blanket rotation.
 * Created window stack to track top window to better handle rotation for windows
 * Make copy of habit object as editing_habit (and clean up on editing window destroy)
 * Added some date utility functions
@@ -77,14 +79,6 @@ WIN_TITLE_MASTER_HABITS_LIST = 'Master Habits List'
 WIN_TITLE_ADD_NEW_HABIT      = 'Add New Habit'
 WIN_TITLE_EDIT_HABIT         = 'Edit Habit'
 WIN_TITLE_ABOUT              = 'About HabitJewel'
-
-# Layout pseudo-constants
-UI_NORMAL       = gtk.HILDON_UI_MODE_NORMAL
-UI_EDIT         = gtk.HILDON_UI_MODE_EDIT
-BTN_ARR_HORIZ   = hildon.BUTTON_ARRANGEMENT_HORIZONTAL
-BTN_ARR_VERT    = hildon.BUTTON_ARRANGEMENT_VERTICAL
-BTN_SIZE_FINGER = gtk.HILDON_SIZE_FINGER_HEIGHT
-BTN_SIZE_THUMB  = gtk.HILDON_SIZE_THUMB_HEIGHT
 
 # Gtk CellRenderer wrapping widths
 # Master Habit List
@@ -317,8 +311,13 @@ class MainWindow:
         self.program.__init__()
         gtk.set_application_name('Habitjewel')
 
-        self.top_window = hildon.StackableWindow()
-        self.top_window.set_title(_(WIN_TITLE_TOP))
+        # Rotation setup
+        orientation = self.get_current_screen_orientation()
+        self.last_orientation = orientation
+        self.set_window_orientation_params(orientation)
+        # self.window_last_orientations = {}
+        self.top_win = self.get_stackable_window(_(WIN_TITLE_TOP))
+        self.program.add_window(self.top_win)
 
         # N900-specific
         self.osso_app_name = 'habitjewel'
@@ -328,48 +327,44 @@ class MainWindow:
         # How does it compare to the current rotation strategy?
         #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
 
-        self.init_disp_orientation()
-
-        self.top_window.connect('destroy', gtk.main_quit)
-        self.top_window.get_screen().connect('size-changed', self.orientation_changed)
-        self.program.add_window(self.top_window)
+        # Set up callback for the Gdk.Window destroy signal
+        self.top_win.connect('destroy', gtk.main_quit)
+        # Set up callback for the Gdk.Screen size-changed signal
+        self.top_win.get_screen().connect('size-changed', self.on_screen_orientation_changed)
 
         # Menus
         menu = self.setup_main_menu()
-        self.top_window.set_app_menu(menu)
+        self.top_win.set_app_menu(menu)
         self.setup_hildon_ui_manager()
 
         self.top_container = self.get_day_habits_list_container()
-        self.top_window.add(self.top_container)
+        self.top_win.add(self.top_container)
 
-        # Initialise our window stack list that we use to decide what needs redrawing when screen orientation is changed
-        self.window_stack = [self.top_window]
-
-        self.top_window.show_all()
+        self.top_win.show_all()
 
 
     def init_autorotation(self):
         try:
             import n900_maemo5_portrait
-            r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, main_window=self.top_window)
+            r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, main_window=self.top_win)
             return r_object
 
         except Exception:
             print "LOGME: Initialising rotation object failed"
 
 
-    def init_disp_orientation(self):
-        self.last_orientation = self.get_display_orientation()
-        if self.last_orientation == PORTRAIT:
+    def set_window_orientation_params(self, orientation):
+        if orientation == PORTRAIT:
+            self.button_size = gtk.HILDON_SIZE_THUMB_HEIGHT
             self.tv_day_activity_wrap_width    = TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT
             self.tv_master_activity_wrap_width = TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT
             self.tv_master_repeats_wrap_width  = TV_MASTER_REPEATS_WRAP_WIDTH_PORTRAIT
-            self.button_size = BTN_SIZE_THUMB
+
         else:
+            self.button_size = gtk.HILDON_SIZE_FINGER_HEIGHT
             self.tv_day_activity_wrap_width    = TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE
             self.tv_master_activity_wrap_width = TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE
             self.tv_master_repeats_wrap_width  = TV_MASTER_REPEATS_WRAP_WIDTH_LANDSCAPE
-            self.button_size = BTN_SIZE_FINGER
 
 
 
@@ -380,30 +375,43 @@ class MainWindow:
     #############################
 
 
-    def pop_window_stack(self, win):
-        win_title = win.get_title()
-        top_of_stack_title = self.window_stack[-1].get_title()
-        if win_title == top_of_stack_title:
-            self.window_stack.pop()
-        else:
-            print "DEBUG: top of stack " + top_of_stack_title + ", current win.get_title() " + win_title + " - this shouldn't happen!"
-
-
     def redraw_window(self):
-        self.top_window.queue_draw()
+        self.top_win.queue_draw()
 
 
     def show_info_banner(self, widget, msg):
         hildon.hildon_banner_show_information(widget, 'qgn_note_infoprint', msg)
 
 
-    def get_display_orientation(self):
+    def get_current_screen_orientation(self):
         width = gtk.gdk.screen_width()
         height = gtk.gdk.screen_height()
         if width > height:
             return LANDSCAPE
         else:
             return PORTRAIT
+
+
+    def get_active_window_title(self):
+        window_stack = gtk.window_list_toplevels()
+        for window in window_stack:
+            print str(window.get_title())
+            if window.is_active():
+                return window.get_title()
+
+
+    def get_stackable_window(self, title):
+        win = hildon.StackableWindow()
+        win.set_title(title)
+        #orientation = self.get_current_screen_orientation()
+        #self.window_last_orientations[title] = orientation
+        #self.set_window_orientation_params(title, orientation)
+        #win.connect('destroy', self.on_general_stackable_window_destroy)
+        return win
+
+
+#    def on_general_stackable_window_destroy(self, win):
+#        gobject.idle_add(self.on_screen_orientation_changed)
 
 
     def event_catcher(self, widget, event):
@@ -421,31 +429,38 @@ class MainWindow:
     # 4) Put to portrait
     # 5) Edit a habit in portrait
     # 6) Go to landscape
-    def orientation_changed(self, screen):
-        orientation = self.get_display_orientation()
+    def on_screen_orientation_changed(self, screen = None):
+        orientation = self.get_current_screen_orientation()
         if orientation == self.last_orientation:
+            # Current orientation same as the last? If so, do nothing
             return
 
         self.last_orientation = orientation
-        top_of_stack_title = self.window_stack[-1].get_title()
-        
-        # If we're on the main screen (Day Habits List)
-        if top_of_stack_title == _(WIN_TITLE_TOP):
-            # This works but may be possible to improve on
-            self.init_disp_orientation()
-            self.top_window.remove(self.top_container)
 
-            self.top_container = self.get_day_habits_list_container()
-            self.top_window.add(self.top_container)
-            self.top_window.show_all()
+        # Re-render the top window, even if behind another window
+        self.set_window_orientation_params(orientation)
+        self.top_win.remove(self.top_container)
+        self.top_container = self.get_day_habits_list_container()
+        self.top_win.add(self.top_container)
+        self.top_win.show_all()
+
+        # Check the active window's title and re-render if required
+        active_window_title = self.get_active_window_title()
+        if not active_window_title:
+            print "DEBUG: couldn't find active window title"
+            return
 
         # Rotation for Master Habits List
-        elif top_of_stack_title == _(WIN_TITLE_MASTER_HABITS_LIST):
-            print "TODO: rotation in Master Habits List" 
+        if active_window_title == _(WIN_TITLE_MASTER_HABITS_LIST):
+            self.mhl_win.remove(self.mhl_container)
+            #self.mhl_container.destroy()
+            self.mhl_container = self.get_master_habits_list_container()
+            self.mhl_win.add(self.mhl_container)
+            self.mhl_win.show_all()
 
         # Rotation for Add/Edit Habit window
-        elif top_of_stack_title == _(WIN_TITLE_ADD_NEW_HABIT) or \
-             top_of_stack_title == _(WIN_TITLE_EDIT_HABIT):
+        elif active_window_title == _(WIN_TITLE_ADD_NEW_HABIT) or \
+             active_window_title == _(WIN_TITLE_EDIT_HABIT):
             print "TODO: rotation in Add/Edit Habit window"
 
 
@@ -459,7 +474,7 @@ class MainWindow:
 
     def set_db_habit_deleted_date(self, habit, deleted_date_dt):
         habitjewel_utils.delete_habit(conn, habit['id'])
-        self.show_info_banner(self.top_window, '"' + habit['activity'] + '" deleted')
+        self.show_info_banner(self.top_win, '"' + habit['activity'] + '" deleted')
 
 
     def set_db_habit_paused_until_date (self, habit, paused_until_date_dt):
@@ -468,9 +483,9 @@ class MainWindow:
                 habit['id'], paused_until_date_dt
             )
         if paused_until_date_dt:
-            self.show_info_banner(self.top_window, '"' + habit['activity'] + '" paused until ' + self.dt_to_display_date(paused_until_date_dt))
+            self.show_info_banner(self.top_win, '"' + habit['activity'] + '" paused until ' + self.dt_to_display_date(paused_until_date_dt))
         else:
-            self.show_info_banner(self.top_window, '"' + habit['activity'] + '" unpaused')
+            self.show_info_banner(self.top_win, '"' + habit['activity'] + '" unpaused')
 
 
 
@@ -519,7 +534,6 @@ class MainWindow:
         if not cal_date_dt:
             cal_date_dt = self.get_today_dt()
         st_win = hildon.StackableWindow()
-        st_win.get_screen().connect('size-changed', self.orientation_changed)
         vbox_cal = gtk.VBox()
         self.cal = self.get_calendar_widget()
         self.cal.select_month((cal_date_dt.month + 12 - 1) % 12, cal_date_dt.year)
@@ -529,17 +543,17 @@ class MainWindow:
         hbox_cal_btns = gtk.HBox(True)
 
         if not hide_today_btn:
-            today_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_HORIZ)
+            today_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
             today_btn.set_label(_('Today'))
             today_btn.connect('clicked', self.on_cal_today_btn_click, st_win)
             hbox_cal_btns.pack_start(today_btn, True, True) 
 
-        prev_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        prev_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         prev_month_btn.set_label(_('Previous Month'))
         prev_month_btn.connect('clicked', self.on_cal_prev_month_btn_click, st_win)
         hbox_cal_btns.pack_start(prev_month_btn, True, True) 
 
-        next_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        next_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         next_month_btn.set_label(_('Next Month'))
         next_month_btn.connect('clicked', self.on_cal_next_month_btn_click, st_win)
         hbox_cal_btns.pack_start(next_month_btn, True, True) 
@@ -715,10 +729,11 @@ class MainWindow:
 
 
     def on_main_menu_master_habits_list_click(self, widget):
-        st_win = self.get_master_habits_list_window()
-        st_win.set_title(_(WIN_TITLE_MASTER_HABITS_LIST))
-        st_win.show_all()
-        self.window_stack.append(st_win)
+        self.mhl_win = self.get_stackable_window(_(WIN_TITLE_MASTER_HABITS_LIST))
+        self.mhl_container = self.get_master_habits_list_container()
+        self.mhl_win.add(self.mhl_container)
+        self.mhl_win.connect('destroy', self.on_master_habits_list_window_destroy)
+        self.mhl_win.show_all()
 
 
     def on_main_menu_go_to_date_click(self, widget):
@@ -729,8 +744,7 @@ class MainWindow:
 
 
     def on_main_menu_about_click(self, widget):
-        st_win = hildon.StackableWindow()
-        st_win.get_screen().connect('size-changed', self.orientation_changed)
+        st_win = self.get_stackable_window(_(WIN_TITLE_ABOUT))
         vbox = gtk.VBox()
         pan = hildon.PannableArea()
 
@@ -780,7 +794,6 @@ habits for future dates can not be set.')
         pan.add(text)
         vbox.pack_start(pan)
         st_win.add(vbox)
-        st_win.set_title(_(WIN_TITLE_ABOUT))
         st_win.show_all()
 
 
@@ -797,13 +810,10 @@ habits for future dates can not be set.')
     ##############################
 
 
-    def get_master_habits_list_window(self):
+    def get_master_habits_list_container(self):
         self.master_habits_list = self.fetch_master_habits_list()
 
-        st_win = hildon.StackableWindow()
-        st_win.get_screen().connect('size-changed', self.orientation_changed)
-
-        self.master_habits_list_tv = hildon.GtkTreeView(UI_NORMAL)
+        self.master_habits_list_tv = hildon.GtkTreeView(gtk.HILDON_UI_MODE_NORMAL)
         self.master_habits_list_tv.set_headers_visible(True)
         model = self.create_master_habits_list_model()
         self.master_habits_list_tv.set_model(model)
@@ -820,9 +830,7 @@ habits for future dates can not be set.')
         pan_area.add(self.master_habits_list_tv)
         vbox.pack_start(pan_area)
 
-        st_win.add(vbox)
-        st_win.connect('destroy', self.on_master_habits_list_window_destroy)
-        return st_win
+        return vbox
 
 
     def create_master_habits_list_model(self):
@@ -958,8 +966,6 @@ habits for future dates can not be set.')
 
 
     def on_master_habits_list_window_destroy(self, win):
-        # Remove from the window stack
-        pop_window_stack(win)
         # Clear data structures and widgets
         self.master_habits_list = None
         self.master_habits_list_tv = None
@@ -977,7 +983,7 @@ habits for future dates can not be set.')
         self.vbox_outer = gtk.VBox(False)
         self.pan_area = hildon.PannableArea()
 
-        self.day_habits_list_tv = hildon.GtkTreeView(UI_NORMAL)
+        self.day_habits_list_tv = hildon.GtkTreeView(gtk.HILDON_UI_MODE_NORMAL)
         # TODO: check if below is necessary
         #self.day_habits_list_tv.set_name('DailyHabitsListTreeview')
         #self.areaview = self.day_habits_list_tv.get_action_area_box()
@@ -987,7 +993,7 @@ habits for future dates can not be set.')
         self.img_prev = gtk.image_new_from_icon_name('general_back', gtk.ICON_SIZE_SMALL_TOOLBAR)
         self.hbox_prev.pack_start(self.img_prev)
         # 'Prev' button
-        self.button_prev = hildon.Button(self.button_size, BTN_ARR_HORIZ)
+        self.button_prev = hildon.Button(self.button_size, hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
         self.button_prev.connect('clicked', self.on_day_habits_list_prev_day_click)
         self.button_prev.add(self.hbox_prev)
 
@@ -1004,13 +1010,13 @@ habits for future dates can not be set.')
         self.img_next = gtk.image_new_from_icon_name('general_forward', gtk.ICON_SIZE_SMALL_TOOLBAR)
         self.hbox_next.pack_start(self.img_next)
         # 'Next' button
-        self.button_next = hildon.Button(self.button_size, BTN_ARR_HORIZ)
+        self.button_next = hildon.Button(self.button_size, hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
         self.button_next.connect('clicked', self.on_day_habits_list_next_day_click)
         self.button_next.add(self.hbox_next)
 
         self.vbox_nav = gtk.VBox(False)
         self.hbox_nav = gtk.HBox()
-        if (self.get_display_orientation() == PORTRAIT):
+        if (self.get_current_screen_orientation() == PORTRAIT):
             self.vbox_nav.pack_start(self.hbox_date, False, False, 5)
             self.hbox_nav.pack_start(self.button_prev)
             self.hbox_nav.pack_start(self.button_next)
@@ -1344,10 +1350,6 @@ habits for future dates can not be set.')
         categories = habitjewel_utils.get_categories_list(conn)
 
         self.edit_win = hildon.StackableWindow()
-        self.edit_win.get_screen().connect('size-changed', self.orientation_changed)
-
-        self.window_stack.append(self.edit_win)
-
         vbox = gtk.VBox()
 
         if not habit:
@@ -1434,7 +1436,7 @@ habits for future dates can not be set.')
         btn_tbl.set_col_spacings(5)
 
         # Delete/undelete button
-        delete_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        delete_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         if not self.editing_habit['deleted_date']:
             delete_btn.set_label(_('Delete'))
         else:
@@ -1443,7 +1445,7 @@ habits for future dates can not be set.')
         btn_tbl.attach(delete_btn, 0, 1, 0, 1)
 
         # Pause/unpause button
-        pause_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        pause_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         if not self.editing_habit['paused_until_date']:
             pause_btn.set_label(_('Pause'))
         else:
@@ -1454,7 +1456,7 @@ habits for future dates can not be set.')
         btn_tbl.attach(pause_btn, 1, 2, 0, 1)
 
         # Save button
-        save_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, BTN_ARR_VERT)
+        save_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         save_btn.set_label(_('Save'))
         save_btn.connect('clicked', self.on_edit_habit_save_btn_click) #, self.edit_win)
         btn_tbl.attach(save_btn, 2, 3, 0, 1)
@@ -1592,10 +1594,10 @@ habits for future dates can not be set.')
 
 
     def on_edit_habit_save_btn_click(self, widget):
-        print str(widget)
-        print str(widget.get_parent())
-        print "///////////////////////////////////////////////////////"
+
+        # Variable to record whether we have a valid habit record to save
         valid = None
+
         if self.editing_habit['activity'] and \
                 self.editing_habit['target'] and \
                 self.editing_habit['measure_desc'] and \
@@ -1608,7 +1610,7 @@ habits for future dates can not be set.')
 
         if valid:
             habitjewel_utils.save_habit(conn, self.editing_habit)
-            self.show_info_banner(self.top_window, 'Habit "' + self.editing_habit['activity'] + '" saved')
+            self.show_info_banner(self.top_win, 'Habit "' + self.editing_habit['activity'] + '" saved')
             self.edit_win.destroy()
             self.redraw_day_habits_list()
         else:
@@ -1616,8 +1618,6 @@ habits for future dates can not be set.')
 
 
     def on_edit_habit_window_destroy(self, win):
-        # Remove from the window stack
-        self.pop_window_stack(win)
         # Clear data structures and widgets
         self.editing_habit = None
 
