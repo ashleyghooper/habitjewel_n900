@@ -18,8 +18,11 @@
 #
 # HabitJewel: Track your habits
 
+VERSION = '0.2.9'
+
 """
 CHANGELOG:
+* Redraw edit habit window when paused/unpaused or deleted/undeleted
 * Removed window stack, tried various ways to only handle rotation for visible window,
   but failed so reverted to blanket rotation.
 * Created window stack to track top window to better handle rotation for windows
@@ -30,9 +33,9 @@ CHANGELOG:
 * Make master habit list, accessible from main menu to edit all habits (not just current day)
 
 TODO:
+* Evaluate changing back from Gtk UIManager to normal Gtk Menus for Hildon-styled popups
 * Test for orientation change issues (see FIXME)
 * Fix redraw of master habits list on orientation change
-* Redraw edit habit window when paused/unpaused or deleted/undeleted
 * Don't prepopulate habit table when no database - make placeholder for when empty instead
 * Restore single click on checkbox to toggle done/missed/unknown statuses
 * Move "About" page markup to external file
@@ -42,8 +45,6 @@ TODO:
 * Move constants to a module
 * Move code at bare module scope into class(es)
 """
-
-VERSION = '0.2.8'
 
 import datetime
 import calendar
@@ -395,7 +396,7 @@ class MainWindow:
     def get_active_window_title(self):
         window_stack = gtk.window_list_toplevels()
         for window in window_stack:
-            print str(window.get_title())
+            # DEBUG: print str(window.get_title())
             if window.is_active():
                 return window.get_title()
 
@@ -422,13 +423,6 @@ class MainWindow:
         return False
 
 
-    #FIXME: there's a bug that occurs with these steps:
-    # 1) Start application in landscape, Edit a habit
-    # 2) Go to portrait, go to landscape
-    # 3) Go back to initial list
-    # 4) Put to portrait
-    # 5) Edit a habit in portrait
-    # 6) Go to landscape
     def on_screen_orientation_changed(self, screen = None):
         orientation = self.get_current_screen_orientation()
         if orientation == self.last_orientation:
@@ -511,6 +505,10 @@ class MainWindow:
     def db_date_to_display_date(self, db_date):
         dt = self.db_date_to_dt(db_date)
         return self.dt_to_display_date(dt)
+
+
+    def dt_to_db_date(self, dt):
+        return dt.strftime('%Y-%m-%d')
 
 
     def get_today_dt(self):
@@ -1430,6 +1428,10 @@ habits for future dates can not be set.')
         int_picker.set_selector(int_selector)
         settings_tbl.attach(int_picker, 1, 2, 1, 2)
 
+        # Info label
+        habit_info = self.get_edit_habit_info_label_text(self.editing_habit)
+        info_lbl = gtk.Label(habit_info)
+
         # Button bar table
         btn_tbl = gtk.Table(1, 3, True)
         btn_tbl.set_row_spacings(5)
@@ -1441,7 +1443,7 @@ habits for future dates can not be set.')
             delete_btn.set_label(_('Delete'))
         else:
             delete_btn.set_label(_('Undelete'))
-        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click)
+        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, info_lbl)
         btn_tbl.attach(delete_btn, 0, 1, 0, 1)
 
         # Pause/unpause button
@@ -1449,10 +1451,8 @@ habits for future dates can not be set.')
         if not self.editing_habit['paused_until_date']:
             pause_btn.set_label(_('Pause'))
         else:
-            pause_lbl = _('Unpause') + '\n' + '<i>' + _('Paused until') + ' ' + self.db_date_to_display_date(self.editing_habit['paused_until_date']) + '</i>'
-            pause_btn.set_label(pause_lbl)
-            pause_btn.child.set_use_markup(True) 
-        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click)
+            pause_btn.set_label(_('Unpause'))
+        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, info_lbl)
         btn_tbl.attach(pause_btn, 1, 2, 0, 1)
 
         # Save button
@@ -1464,12 +1464,34 @@ habits for future dates can not be set.')
         # Render
         vbox.pack_start(a_entry, False, True, 3)
         vbox.pack_start(settings_tbl, True, True, 8)
+        vbox.pack_start(info_lbl, True, False, 8)
         vbox.pack_start(btn_tbl, True, True, 3)
 
         self.edit_win.add(vbox)
         self.edit_win.set_title(win_title)
         self.edit_win.connect('destroy', self.on_edit_habit_window_destroy)
         self.edit_win.show_all()
+
+
+    def get_edit_habit_info_label_text(self, habit):
+        if habit['deleted_date']:
+            habit_info = _('Deleted')
+            habit_info += ' ' + self.db_date_to_display_date(habit['deleted_date'])
+        elif habit['paused_until_date']:
+            habit_info = _('Paused until')
+            habit_info += ' '
+            if self.db_date_to_dt(habit['paused_until_date']) == self.get_today_dt():
+                habit_info += _('today')
+            else:
+                habit_info += self.db_date_to_display_date(habit['paused_until_date'])
+        else:
+            habit_info = _('Active')
+        habit_info += ' ('
+        habit_info += _('Created on')
+        habit_info += ' '
+        habit_info += self.db_date_to_display_date(habit['created_date'])
+        habit_info += ')'
+        return habit_info 
 
         
     def on_activity_changed(self, widget):
@@ -1569,28 +1591,35 @@ habits for future dates can not be set.')
         self.editing_habit['limit_week_day_nums'] = ','.join(selected_days)
 
 
-    def on_edit_habit_delete_btn_click(self, widget):
+    def on_edit_habit_delete_btn_click(self, widget, info_lbl):
         if self.editing_habit['deleted_date']:
+            widget.set_label(_('Delete'))
             self.editing_habit['deleted_date'] = None
         else:
-            self.editing_habit['deleted_date'] = self.get_today_dt()
+            widget.set_label(_('Undelete'))
+            self.editing_habit['deleted_date'] = self.dt_to_db_date(self.get_today_dt())
+        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_cal_date_selected(self, cal, st_win):
+    def on_edit_habit_pause_cal_date_selected(self, cal, st_win, widget, info_lbl):
         paused_until_date_dt = self.get_gtk_cal_date_to_dt(cal)
         st_win.destroy()
-        self.editing_habit['paused_until_date'] = paused_until_date_dt
+        widget.set_label(_('Unpause'))
+        self.editing_habit['paused_until_date'] = self.dt_to_db_date(paused_until_date_dt)
+        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_btn_click(self, widget):
+    def on_edit_habit_pause_btn_click(self, widget, info_lbl):
         if self.editing_habit['paused_until_date']:
+            widget.set_label(_('Pause'))
             self.editing_habit['paused_until_date'] = None
+            info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
         else:
             # parameters are date for calendar and whether to hide the 'Today' button
             st_win = self.get_general_calendar_window(None, True)
             st_win.set_title(_(WIN_TITLE_PAUSE_UNTIL_DATE))
             st_win.show_all()
-            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win)
+            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win, widget, info_lbl)
 
 
     def on_edit_habit_save_btn_click(self, widget):
