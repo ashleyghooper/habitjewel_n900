@@ -132,6 +132,12 @@ def get_habits_list_all(conn):
             FROM habits h
                 JOIN measures m
                     ON m.id = h.measure_id
+            ORDER BY CASE
+                -- Sort unfulfilled or completed habits to bottom
+                WHEN h.deleted_date IS NOT NULL THEN 2 
+                WHEN paused_until_date IS NOT NULL THEN 0
+                ELSE 1
+            END, priority, h.activity
         """, []
     ):
 
