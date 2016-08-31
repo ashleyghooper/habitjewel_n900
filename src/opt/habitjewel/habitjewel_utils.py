@@ -182,6 +182,15 @@ def save_habit(conn, habit):
 
         conn.execute(
             """
+            INSERT INTO habits_a
+                SELECT DATETIME('now', 'localtime'),
+                    *
+                  FROM habits
+                 WHERE id = ?
+            """, [habit_id])
+
+        conn.execute(
+            """
             UPDATE habits
                SET activity = ?, target = ?,
                        measure_id = (SELECT id FROM measures WHERE desc = ?),
