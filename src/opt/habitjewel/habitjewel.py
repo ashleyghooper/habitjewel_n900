@@ -19,11 +19,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.2.12'
+VERSION = '0.3.0'
 
 """
 CHANGELOG:
+v0.3.0
+* Bumped version number due to incompatible schema changes
+
+v0.2.12
+* Fixed incorrect dependency on portrait for FremantleRotation
+* Changed habit schedules to based on frequency (repetitions) per weekly cycle
+
+v0.2.10
 * Changed back from Gtk UIManager to normal Gtk Menus for Hildon-styled popups
+
+v0.2.9
 * Fixed redraw of master habits list on orientation change
 * Redraw edit habit window when paused/unpaused or deleted/undeleted
 * Removed window stack, tried various ways to only handle rotation for visible window,
@@ -104,8 +114,6 @@ TV_DAY_COL_NUM_CHECKBOX       = 2
 TV_DAY_COL_NAME_CHECKBOX      = 'Checkbox'
 TV_DAY_COL_NUM_PCT_COMPLETE   = 3
 TV_DAY_COL_NAME_PCT_COMPLETE  = 'Percent complete'
-TV_DAY_COL_NUM_INTVL_CODE     = 4
-TV_DAY_COL_NAME_INTVL_CODE    = 'Interval type'
 
 # Day habits list treeview column indexes and titles
 TV_MASTER_COL_NUM_ID             = 0
@@ -114,13 +122,11 @@ TV_MASTER_COL_NUM_ICON           = 1
 TV_MASTER_COL_NAME_ICON          = 'Icon'
 TV_MASTER_COL_NUM_ACTIVITY       = 2
 TV_MASTER_COL_NAME_ACTIVITY      = 'Activity'
-TV_MASTER_COL_NUM_REPEATS        = 3
-TV_MASTER_COL_NAME_REPEATS       = 'Repeats'
-TV_MASTER_COL_NUM_INTVL_CODE     = 4 
-TV_MASTER_COL_NAME_INTVL_CODE    = 'Interval type'
-TV_MASTER_COL_NUM_INTVL          = 5 
-TV_MASTER_COL_NAME_INTVL         = 'Interval'
-TV_MASTER_COL_NUM_STATUS         = 6 
+TV_MASTER_COL_NUM_FREQ_DISP      = 3
+TV_MASTER_COL_NAME_FREQ_DISP     = 'Frequency'
+TV_MASTER_COL_NUM_FREQ           = 4
+TV_MASTER_COL_NAME_FREQ          = 'Frequency'
+TV_MASTER_COL_NUM_STATUS         = 5
 TV_MASTER_COL_NAME_STATUS        = 'Status'
 
 # Habit status thresholds and pixbufs
@@ -183,19 +189,13 @@ else:
         """)
     cursor.execute(
         """
-        CREATE TABLE goal_habits (id INTEGER PRIMARY KEY,
-            goal_id INTEGER, habit_id INTEGER)
-        """)
-    cursor.execute(
-        """
         CREATE TABLE habits (id INTEGER PRIMARY KEY,
             activity TEXT,
+            goal_id INTEGER,
             measure_id INTEGER,
             target INTEGER,
             priority INTEGER,
-            interval_code TEXT,
-            interval INTEGER,
-            limit_week_day_nums STRING,
+            frequency INTEGER,
             points INTEGER,
             created_date DATE,
             paused_until_date DATE,
@@ -206,21 +206,15 @@ else:
         CREATE TABLE habits_a (update_date DATE,
             id INTEGER,
             activity TEXT,
+            goal_id INTEGER,
             measure_id INTEGER,
             target INTEGER,
             priority INTEGER,
-            interval_code TEXT,
-            interval INTEGER,
-            limit_week_day_nums STRING,
+            frequency INTEGER,
             points INTEGER,
             created_date DATE,
             paused_until_date DATE,
             deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE interval_types (id INTEGER PRIMARY KEY, code TEXT,
-            desc TEXT, created_date DATE, deleted_date DATE)
         """)
     cursor.execute(
         """
@@ -251,21 +245,6 @@ else:
         """, ['Academic'])
     cursor.execute(
         """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['DAY', 'Daily'])
-    cursor.execute(
-        """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['WEEK', 'Weekly'])
-    cursor.execute(
-        """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['MONTH', 'Monthly'])
-    cursor.execute(
-        """
         INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
         """, ['min', 'mins', 'minute'])
     cursor.execute(
@@ -282,39 +261,39 @@ else:
         """, ['word', 'words', 'words'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, points, created_date)
-            VALUES (?, 1, 30, 1, 'DAY', 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 1, 30, 1, 7, 100, CURRENT_DATE)
         """, ['Meditate'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'WEEK', 1, 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 1, 30, 1, 1, 100, CURRENT_DATE)
         """, ['Study French'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'WEEK', 1, 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 1, 30, 1, 1, 100, CURRENT_DATE)
         """, ['Study Spanish'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 60, 1, 'MONTH', 1, 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 1, 60, 1, 1, 100, CURRENT_DATE)
         """, ['Study software development'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, limit_week_day_nums, points, created_date)
-            VALUES (?, 2, 2, 2, 'DAY', 1, '0,1,3,5', 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 3, 2, 2, 4, 100, CURRENT_DATE)
         """, ['Walk'])
     cursor.execute(
         """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 2, 50, 3, 'WEEK', 1, 100, CURRENT_DATE)
+        INSERT INTO habits (activity, goal_id, measure_id, target, priority,
+            frequency, points, created_date)
+            VALUES (?, 0, 3, 50, 3, 1, 100, CURRENT_DATE)
         """, ['Cycle'])
     
     conn.commit()
@@ -796,27 +775,15 @@ basis, helping to motivate your self-improvement.\n\n')
         buf.insert_with_tags(iter, 'Meditate', i_tag)
         buf.insert(iter, ')\n\
 * The target for each repetition of the habit, e.g. 20 minutes\n\
-* The repetition interval, which determines how often you want to perform the habit\n\n\
-The repetition interval can be either:\n\
-a) ')
-        buf.insert_with_tags(iter, 'day-based', i_tag)
-        buf.insert(iter, ', repeating either every day or selected days of the week such \
-as Monday, Wednesday, Friday\n\
-b) ')
-        buf.insert_with_tags(iter, 'week-based', i_tag)
-        buf.insert(iter, ', repeating once for every ')
-        buf.insert_with_tags(iter, 'n', i_tag)
-        buf.insert(iter, 'weeks\n\
-c) ')
-        buf.insert_with_tags(iter, 'month-based', i_tag)
-        buf.insert(iter, ', repeating once for every ')
-        buf.insert_with_tags(iter, 'n', i_tag)
-        buf.insert(iter, ' months\n\n\
+* The frequency, which is the number of times per week you want to perform the habit\n\n\
 After creating your habits they are displayed on the main page, along with \
 navigation buttons to go back or forward one day at a time. For each day, the \
 habits that would be current for that day are displayed. A checkbox allows \
-toggling the fulfillment status of each habit, either undetermined (empty \
-box), completed (green tick), or missed (red cross).\n\n\
+toggling the fulfillment status of each habit, either:\n\n\
+* undetermined (empty box)\n\
+* completed (green tick)\n\
+* partially complete (checkbox partially filled with yellow), or\n\
+* missed (red cross)\n\n\
 The status of a habit for the current day or any preceding day can be changed \
 at any time, but for reasons that should be obvious, the fulfillment status of \
 habits for future dates can not be set.')
@@ -890,21 +857,16 @@ habits for future dates can not be set.')
         c_activity.set_property('expand', True)
         treeview.append_column(c_activity)
 
-        # column for repeats
+        # column for frequency display (e.g. 1/Week)
         r_repeats = gtk.CellRendererText()
         r_repeats.set_property('wrap-mode', gtk.WRAP_WORD)
         r_repeats.set_property('wrap-width', self.tv_master_repeats_wrap_width)
-        c_repeats = gtk.TreeViewColumn(TV_MASTER_COL_NAME_REPEATS, r_repeats, markup=TV_MASTER_COL_NUM_REPEATS)
+        c_repeats = gtk.TreeViewColumn(TV_MASTER_COL_NAME_FREQ_DISP, r_repeats, markup=TV_MASTER_COL_NUM_FREQ_DISP)
         c_repeats.set_property('expand', True)
         treeview.append_column(c_repeats)
 
-        # column for interval type (code)
-        c_intvl_code = gtk.TreeViewColumn(TV_MASTER_COL_NAME_INTVL_CODE, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_INTVL_CODE)
-        c_intvl_code.set_visible(False)
-        treeview.append_column(c_intvl_code)
-
-        # column for interval
-        c_intvl = gtk.TreeViewColumn(TV_MASTER_COL_NAME_INTVL, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_INTVL)
+        # column for frequency
+        c_intvl = gtk.TreeViewColumn(TV_MASTER_COL_NAME_FREQ, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_FREQ)
         c_intvl.set_visible(False)
         treeview.append_column(c_intvl)
 
@@ -917,29 +879,6 @@ habits for future dates can not be set.')
     def populate_master_habits_list_ls(self, model, master_habits_list):
         for item in master_habits_list:
             lstore_iter = model.append()
-
-            repeats = 'never'
-            if item['interval_code'] == 'DAY':
-                days_list = []
-                if item['limit_week_day_nums']:
-                    for i in range(7):
-                        if item['limit_week_day_nums'].find(str(i)) != -1:
-                            days_list.append(calendar.day_abbr[i])
-                        repeats = ",".join(days_list)
-                else:
-                    repeats = 'Daily'
-
-            elif item['interval_code'] == 'WEEK':
-                if item['interval'] == 1:
-                    repeats = 'Weekly'
-                else: 
-                    repeats = str(item['interval']) + ' weeks' 
-
-            elif item['interval_code'] == 'MONTH':
-                if item['interval'] == 1:
-                    repeats = 'Monthly'
-                else: 
-                    repeats = str(item['interval']) + ' months' 
 
             if item['deleted_date']:
                 status = 'deleted'
@@ -957,12 +896,10 @@ habits for future dates can not be set.')
                     icon_pixbuf, \
                 TV_MASTER_COL_NUM_ACTIVITY, \
                     '<b>' + item['activity'] + '</b> ' + str(item['target_desc']), \
-                TV_MASTER_COL_NUM_REPEATS, \
-                    repeats, \
-                TV_MASTER_COL_NUM_INTVL_CODE, \
-                    item['interval_code'], \
-                TV_MASTER_COL_NUM_INTVL, \
-                    item['interval'], \
+                TV_MASTER_COL_NUM_FREQ_DISP, \
+                    str(item['frequency']) + ' / ' + _('week'), \
+                TV_MASTER_COL_NUM_FREQ, \
+                    item['frequency'], \
                 TV_MASTER_COL_NUM_STATUS, \
                     status \
             )
@@ -1165,18 +1102,20 @@ habits for future dates can not be set.')
             lstore_iter = self.day_habits_list_model.append()
             checkbox_pixbuf = self.get_pixbuf_filename_for_completion_status(item['pct_complete'])
  
+            activity_markup = '<b>' + item['activity'] + '</b> ' + str(item['target_desc']);
+            if item['frequency'] > 1:
+                activity_markup += ' <b>' + str(item['progress']) + '/' + \
+                        str(item['frequency']) + '</b>'
+
             self.day_habits_list_model.set(lstore_iter, \
                 TV_DAY_COL_NUM_ID, \
                     item['id'], \
                 TV_DAY_COL_NUM_ACTIVITY, \
-                    '<b>' + item['activity'] + '</b> ' + str(item['target_desc']) \
-                    + ' <i>' + item['by_when'] + '</i>', \
+                    activity_markup, \
                 TV_DAY_COL_NUM_CHECKBOX, \
                     checkbox_pixbuf, \
                 TV_DAY_COL_NUM_PCT_COMPLETE, \
-                    item['pct_complete'], \
-                TV_DAY_COL_NUM_INTVL_CODE, \
-                    item['interval_code'] \
+                    item['pct_complete'] \
             )
 
 
@@ -1227,7 +1166,7 @@ habits for future dates can not be set.')
         treeview.append_column(column)
 
         # column for interval type
-        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_INTVL_CODE, gtk.CellRendererText(), text=TV_DAY_COL_NUM_INTVL_CODE)
+        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_PERIOD_CODE, gtk.CellRendererText(), text=TV_DAY_COL_NUM_PERIOD_CODE)
         #column.set_visible(False)
         #treeview.append_column(column)
 
@@ -1410,12 +1349,11 @@ habits for future dates can not be set.')
         vbox = gtk.VBox()
 
         if not habit:
-            self.editing_habit = {'interval_code':'DAY', \
+            self.editing_habit = { \
                     'activity':'Describe activity here', \
                     'target':'10', \
                     'measure_desc':'minute', \
-                    'limit_week_day_nums':'0,1,2,3,4,5,6', \
-                    'interval':'', \
+                    'frequency':'7', \
                     'paused_until_date':'', \
                     'deleted_date':'' \
                     }
@@ -1469,23 +1407,14 @@ habits for future dates can not be set.')
         settings_tbl.attach(m_picker, 1, 2, 0, 1)
         m_selector.connect('changed', self.on_edit_habit_measure_changed)
 
-        # Habit interval type
-        it_selector = self.create_interval_type_selector(self.editing_habit['interval_code'])
-        it_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+        # Habit frequency
+        f_selector = self.create_frequency_selector(self.editing_habit['frequency'])
+        f_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        it_picker.set_title(_('Interval Type'))
-        it_picker.set_selector(it_selector)
-        settings_tbl.attach(it_picker, 0, 1, 1, 2)
-        it_selector.connect('changed', self.on_edit_habit_interval_type_changed)
-
-        # Habit interval
-        int_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
-                hildon.BUTTON_ARRANGEMENT_VERTICAL)
-
-        int_selector, title = self.get_edit_habit_interval_selector()
-        int_picker.set_title(title)
-        int_picker.set_selector(int_selector)
-        settings_tbl.attach(int_picker, 1, 2, 1, 2)
+        f_picker.set_title(_('Frequency'))
+        f_picker.set_selector(f_selector)
+        settings_tbl.attach(f_picker, 0, 1, 1, 2)
+        f_selector.connect('changed', self.on_edit_habit_frequency_changed)
 
         # Info label
         habit_info = self.get_edit_habit_info_label_text(self.editing_habit)
@@ -1586,49 +1515,25 @@ habits for future dates can not be set.')
         self.editing_habit['measure_desc'] = widget.get_current_text()
 
 
-    def create_interval_type_selector(self, selected_interval_code = None):
-        interval_types = habitjewel_utils.get_interval_types_list(conn)
-        selector = hildon.TouchSelector(text = True)
-        index = 0
-        for interval_type in interval_types:
-            selector.append_text(interval_type['desc'])
-            if str(interval_type['code']) == str(selected_interval_code):
-                selector.set_active(0, index)
-            index += 1
+    def get_edit_habit_frequency_selector(self):
+        # Selection of repeat frequency
+        selector = self.create_frequency_selector(self.editing_habit['frequency'])
+        title = _('Frequency')
+        selector.connect('changed', self.on_edit_habit_frequency_changed)
         return selector
 
 
-    def on_edit_habit_interval_type_changed(self, widget, user_data):
-        self.editing_habit['interval_code'] = widget.get_current_text()
-
-
-    def get_edit_habit_interval_selector(self):
-        if self.editing_habit['interval_code'] == 'DAY':
-            # Allow limiting daily habit to specific days of the week
-            int_selector = self.create_limit_week_days_selector(self.editing_habit['limit_week_day_nums'])
-            title = _('Days of Week')
-            int_selector.connect('changed', self.on_edit_habit_limit_week_days_changed)
-
-        else:
-            # Selection of repeat interval for weekly/monthly habits
-            int_selector = self.create_interval_selector(self.editing_habit['interval'])
-            title = _('Interval')
-            int_selector.connect('changed', self.on_edit_habit_interval_changed)
-
-        return (int_selector, title)
-
-
-    def create_interval_selector(self, selected_interval = None):
+    def create_frequency_selector(self, selected_frequency = None):
         selector = hildon.TouchSelector(text = True)
         for i in range(10):
             selector.append_text(str(i))
-            if str(i) == str(selected_interval):
+            if str(i) == str(selected_frequency):
                 selector.set_active(0, i)
         return selector
 
 
-    def on_edit_habit_interval_changed(self, widget, user_data):
-        self.editing_habit['interval'] = widget.get_current_text()
+    def on_edit_habit_frequency_changed(self, widget, user_data):
+        self.editing_habit['frequency'] = widget.get_current_text()
 
 
     def create_limit_week_days_selector(self, selected_days_of_week = None):
@@ -1689,12 +1594,8 @@ habits for future dates can not be set.')
         if self.editing_habit['activity'] and \
                 self.editing_habit['target'] and \
                 self.editing_habit['measure_desc'] and \
-                self.editing_habit['interval_code']:
-
-            if self.editing_habit['interval_code'] == 'DAY':
-                valid = True
-            elif self.editing_habit['interval']:
-                valid = True
+                self.editing_habit['frequency']:
+            valid = True
 
         if valid:
             habitjewel_utils.save_habit(conn, self.editing_habit)
