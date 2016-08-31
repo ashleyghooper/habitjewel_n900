@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
-# Copyright (C) 2016 by Ashley Hooper
+#
+# HabitJewel: Track your habits
+# Copyright (c) 2016 Ashley Hooper
 # <ashleyghooper@gmail.com>
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -15,10 +18,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-#
-# HabitJewel: Track your habits
 
-VERSION = '0.2.11'
+VERSION = '0.2.12'
 
 """
 CHANGELOG:
@@ -59,9 +60,8 @@ import sqlite3
 import sys
 import time
 
-from n900_maemo5_portrait import FremantleRotation
-
 import habitjewel_utils
+
 
 
 # Constants
@@ -189,6 +189,22 @@ else:
     cursor.execute(
         """
         CREATE TABLE habits (id INTEGER PRIMARY KEY,
+            activity TEXT,
+            measure_id INTEGER,
+            target INTEGER,
+            priority INTEGER,
+            interval_code TEXT,
+            interval INTEGER,
+            limit_week_day_nums STRING,
+            points INTEGER,
+            created_date DATE,
+            paused_until_date DATE,
+            deleted_date DATE)
+        """)
+    cursor.execute(
+        """
+        CREATE TABLE habits_a (update_date DATE,
+            id INTEGER,
             activity TEXT,
             measure_id INTEGER,
             target INTEGER,
@@ -357,8 +373,8 @@ class MainWindow:
             r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, main_window=self.top_win)
             return r_object
 
-        except Exception:
-            print "LOGME: Initialising rotation object failed"
+        except:
+            print 'LOGME: Initialising rotation object failed'
 
 
     def set_window_orientation_params(self, orientation):
@@ -770,7 +786,7 @@ class MainWindow:
         iter = buf.get_iter_at_offset(0)
         i_tag = buf.create_tag('i', style=pango.STYLE_ITALIC)
         b_tag = buf.create_tag('b', weight=pango.WEIGHT_BOLD)
-        buf.insert_with_tags(iter, 'HabitJewel', b_tag)
+        buf.insert_with_tags(iter, 'HabitJewel v' + VERSION, b_tag)
         buf.insert(iter, ', copyright © Ashley Hooper, 2016\n\n')
         buf.insert_with_tags(iter, 'HabitJewel', i_tag)
         buf.insert(iter, ' tracks your desired habits and their fulfillment on a regular \
