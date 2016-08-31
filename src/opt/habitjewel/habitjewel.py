@@ -18,7 +18,7 @@
 #
 # HabitJewel: Track your habits
 
-VERSION = '0.2.10'
+VERSION = '0.2.11'
 
 """
 CHANGELOG:
@@ -59,7 +59,7 @@ import sqlite3
 import sys
 import time
 
-from portrait import FremantleRotation
+from n900_maemo5_portrait import FremantleRotation
 
 import habitjewel_utils
 
