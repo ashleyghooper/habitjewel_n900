@@ -3,4 +3,4 @@
 kill $(pgrep -f habitjewel.py) 2>/dev/null
 # Relaunch habitjewel
 cd /home/user/src/python/n900/habitjewel/src/opt/habitjewel
-./habitjewel.py > habitjewel.out 2>&1
+./habitjewel.py > /tmp/habitjewel.out 2>&1

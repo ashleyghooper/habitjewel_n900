@@ -187,6 +187,28 @@ def save_habit(conn, habit):
     conn.commit()
 
 
+def clone_habit(conn, habit_id, new_activity):
+    conn.execute(
+        """
+        INSERT INTO habits
+            SELECT NULL,
+                ?,
+                weekly_quota,
+                priority,
+                measure_id,
+                target,
+                points,
+                goal_id,
+                CURRENT_DATE,
+                NULL,
+                NULL
+              FROM habits
+             WHERE id = ?
+        """, [new_activity, habit_id])
+
+    conn.commit()
+
+
 def get_measures_list(conn):
 
     measures_list=[]
@@ -210,6 +232,19 @@ def get_measures_list(conn):
         measures_list.append(measure)
 
     return measures_list
+
+
+def get_measure(conn, measure_desc):
+    cursor = conn.execute(
+        """
+        SELECT id, unit, plural
+          FROM measures
+         WHERE LOWER(desc) = ?
+        """, [measure_desc.lower()])
+
+    row = cursor.fetchone()
+
+    return row
 
 
 def is_null_measure(conn, measure_desc):

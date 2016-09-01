@@ -19,10 +19,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.4.0'
+VERSION = '0.5.0'
 
 """
 CHANGELOG:
+v0.5.0
+* Added New Habit button and 'clone habit' tap and hold option in MHL
+* Added habit parameters preview on habit editing screen
+
 v0.4.0
 * Added priority to the Edit Habits screen
 * Added null measure for habits which don't have any associated measure
@@ -611,7 +615,10 @@ class MainWindow:
     def get_master_activity_cmenu(self):
         menu_def = [ \
                 ['Edit Habit', self.on_master_activity_cmenu_edit_selected], \
+                ['Clone Habit', self.on_master_activity_cmenu_clone_selected], \
+                ['Delete Habit', self.on_master_activity_cmenu_delete_selected], \
         ]
+
 
         return self.get_generated_hildon_context_menu(menu_def)
 
@@ -724,7 +731,26 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.master_habits_list_tv.tap_and_hold_setup(None)
         self.master_habits_list_tv.connect('tap-and-hold', self.on_master_tv_habit_tap_and_hold)
 
+        # Create the outermost container
         vbox = gtk.VBox()
+
+        # Create the New Habit button
+        hbox = gtk.HBox()
+        img = gtk.image_new_from_icon_name("general_add", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        img.set_alignment(0.95, 0.5)
+        hbox.pack_start(img, True, True, 0)
+                        
+        label = gtk.Label(_("New Habit"))
+        label.set_alignment(0.05, 0.5)
+        hbox.pack_start(label, True, True, 0)
+
+        button = hildon.Button(self.button_size, hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        button.connect("clicked", self.on_master_habits_list_new_habit_click)
+        button.add(hbox)
+
+        vbox.pack_start(button, False, False, 0)
+
+        # Create the pannable area for the treeview
         pan_area = hildon.PannableArea()
         pan_area.add(self.master_habits_list_tv)
         vbox.pack_start(pan_area)
@@ -844,6 +870,11 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             self.touched_habit = None
 
 
+    def on_master_habits_list_new_habit_click (self, widget):
+        habit = None
+        self.habit_edit_window(habit)
+
+
     def on_master_tv_habit_tap_and_hold(self, widget):
         if not self.touched_tv_col_title:
             return
@@ -858,6 +889,23 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             return
         else:
             self.habit_edit_window(self.touched_habit)
+
+
+    def on_master_activity_cmenu_clone_selected(self, action):
+        if not self.touched_habit:
+            return
+        else:
+            new_activity = self.touched_habit['activity'] + ' (' + _('copy') + ')'
+            habitjewel_db.clone_habit(conn, self.touched_habit['id'], new_activity)
+            self.redraw_master_habits_list()
+
+
+    def on_master_activity_cmenu_delete_selected(self, action):
+        if not self.touched_habit:
+            return
+        else:
+            habitjewel_db.delete_habit(conn, self.touched_habit['id'])
+            self.redraw_master_habits_list()
 
 
     def on_master_habits_list_window_destroy(self, win):
@@ -1264,7 +1312,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             self.editing_habit = { \
                     'activity':'Describe activity here', \
                     'weekly_quota':'7', \
-                    'measure_desc':_(NULL_MEASURE_DESC), \
+                    'measure_desc':NULL_MEASURE_DESC, \
+                    'unit':'', \
+                    'plural':'', \
                     'null_measure':'1', \
                     'priority':'2', \
                     'target':'1', \
@@ -1286,6 +1336,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         a_entry.set_position(len(self.editing_habit['activity']))
         a_entry.connect('changed', self.on_activity_changed)
 
+        # Preview label
+        preview_info = self.get_edit_habit_preview_label_text(self.editing_habit)
+        preview_lbl = gtk.Label(preview_info)
+
         # Settings table
         settings_tbl = gtk.Table(2, 2, True)
         settings_tbl.set_row_spacings(5)
@@ -1298,7 +1352,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         f_picker.set_title(_('Weekly Quota'))
         f_picker.set_selector(f_selector)
         settings_tbl.attach(f_picker, 0, 1, 0, 1)
-        f_selector.connect('changed', self.on_edit_habit_weekly_quota_changed)
+        f_selector.connect('changed', self.on_edit_habit_weekly_quota_changed, preview_lbl)
 
         # Habit measure
         m_selector = self.create_measures_selector(self.editing_habit['measure_desc'])
@@ -1307,7 +1361,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         m_picker.set_title(_('Measure'))
         m_picker.set_selector(m_selector)
         settings_tbl.attach(m_picker, 1, 2, 0, 1)
-        m_selector.connect('changed', self.on_edit_habit_measure_changed)
+        m_selector.connect('changed', self.on_edit_habit_measure_changed, preview_lbl)
 
         # Habit priority
         p_selector = self.create_priority_selector(self.editing_habit['priority'])
@@ -1316,7 +1370,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         p_picker.set_title(_('Priority'))
         p_picker.set_selector(p_selector)
         settings_tbl.attach(p_picker, 0, 1, 1, 2)
-        p_selector.connect('changed', self.on_edit_habit_priority_changed)
+        p_selector.connect('changed', self.on_edit_habit_priority_changed, preview_lbl)
 
         # Habit target
         # (change to SpinButton ?)
@@ -1331,13 +1385,13 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         t_picker.set_title(_('Target'))
         t_picker.set_selector(t_selector)
         settings_tbl.attach(t_picker, 1, 2, 1, 2)
-        t_selector.connect('changed', self.on_edit_habit_target_changed)
+        t_selector.connect('changed', self.on_edit_habit_target_changed, preview_lbl)
         # Expose target picker widget as class variable
         self.edit_habit_target_picker = t_picker
 
-        # Info label
-        habit_info = self.get_edit_habit_info_label_text(self.editing_habit)
-        info_lbl = gtk.Label(habit_info)
+        # Status label
+        habit_status_text = self.get_edit_habit_status_label_text(self.editing_habit)
+        status_lbl = gtk.Label(habit_status_text)
 
         # Button bar table
         btn_tbl = gtk.Table(1, 3, True)
@@ -1350,7 +1404,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             delete_btn.set_label(_('Delete'))
         else:
             delete_btn.set_label(_('Undelete'))
-        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, info_lbl)
+        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, status_lbl)
         btn_tbl.attach(delete_btn, 0, 1, 0, 1)
 
         # Pause/unpause button
@@ -1359,7 +1413,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             pause_btn.set_label(_('Pause'))
         else:
             pause_btn.set_label(_('Unpause'))
-        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, info_lbl)
+        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, status_lbl)
         btn_tbl.attach(pause_btn, 1, 2, 0, 1)
 
         # Save button
@@ -1369,10 +1423,11 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         btn_tbl.attach(save_btn, 2, 3, 0, 1)
 
         # Render
-        vbox.pack_start(a_entry, False, True, 3)
-        vbox.pack_start(settings_tbl, True, True, 8)
-        vbox.pack_start(info_lbl, True, False, 8)
-        vbox.pack_start(btn_tbl, True, True, 3)
+        vbox.pack_start(a_entry, False, True, 0)
+        vbox.pack_start(preview_lbl, True, False, 0)
+        vbox.pack_start(settings_tbl, True, True, 0)
+        vbox.pack_start(status_lbl, True, False, 0)
+        vbox.pack_start(btn_tbl, True, True, 0)
 
         self.edit_win.add(vbox)
         self.edit_win.set_title(win_title)
@@ -1390,7 +1445,32 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             self.edit_habit_target_picker.show();
 
 
-    def get_edit_habit_info_label_text(self, habit):
+    def get_edit_habit_preview_label_text(self, habit):
+        preview = ''
+        if not 'null_measure' in habit or \
+                'null_measure' in habit and habit['null_measure'] != '1':
+
+            if 'target' in habit and habit['target'] and \
+                    'measure_desc' in habit and habit['measure_desc']:
+                if habit['target'] == '1':
+                    measure = habit['unit']
+                else:
+                    measure = habit['plural']
+                preview += str(habit['target']) + ' ' + measure
+
+        if preview:
+            preview += ', '
+
+        if 'weekly_quota' in habit and habit['weekly_quota']:
+            preview += str(habit['weekly_quota']) + ' ' + _('times per week')
+
+        if 'priority' in habit and habit['priority']:
+            preview += ' (' + _('priority') + ' ' + str(habit['priority']) + ')'
+
+        return preview
+
+
+    def get_edit_habit_status_label_text(self, habit):
         if 'deleted_date' in habit and habit['deleted_date']:
             habit_info = _('Deleted')
             habit_info += ' ' + self.db_date_to_display_date(habit['deleted_date'])
@@ -1410,7 +1490,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 habit_info += self.db_date_to_display_date(habit['created_date'])
                 habit_info += ')'
             else:
-                habit_info = _('Enter habit details')
+                habit_info = _('Define habit')
         return habit_info 
 
 
@@ -1447,9 +1527,20 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         return selector
 
 
-    def on_edit_habit_measure_changed(self, widget, user_data):
+    def on_edit_habit_measure_changed(self, widget, user_data, preview_lbl):
         self.editing_habit['measure_desc'] = widget.get_current_text()
         self.set_target_picker_visibility()
+        if self.editing_habit['measure_desc'] != NULL_MEASURE_DESC:
+            self.editing_habit['null_measure'] = '0'
+            measure_id, unit, plural = \
+                    habitjewel_db.get_measure(conn, self.editing_habit['measure_desc'])
+            self.editing_habit['unit'] = unit
+            self.editing_habit['plural'] = plural
+        else:
+            self.editing_habit['null_measure'] = '1'
+            self.editing_habit['unit'] = ''
+            self.editing_habit['plural'] = ''
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
     def create_priority_selector(self, selected_priority = None):
@@ -1461,8 +1552,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         return selector
 
 
-    def on_edit_habit_priority_changed(self, widget, user_data):
+    def on_edit_habit_priority_changed(self, widget, user_data, preview_lbl):
         self.editing_habit['priority'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
     def create_target_selector(self, selected_target = None):
@@ -1474,43 +1566,45 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         return selector
 
 
-    def on_edit_habit_target_changed(self, widget, user_data):
+    def on_edit_habit_target_changed(self, widget, user_data, preview_lbl):
         self.editing_habit['target'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
-    def on_edit_habit_weekly_quota_changed(self, widget, user_data):
+    def on_edit_habit_weekly_quota_changed(self, widget, user_data, preview_lbl):
         self.editing_habit['weekly_quota'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
-    def on_edit_habit_delete_btn_click(self, widget, info_lbl):
+    def on_edit_habit_delete_btn_click(self, widget, status_lbl):
         if self.editing_habit['deleted_date']:
             widget.set_label(_('Delete'))
             self.editing_habit['deleted_date'] = None
         else:
             widget.set_label(_('Undelete'))
             self.editing_habit['deleted_date'] = self.dt_to_db_date(self.get_today_dt())
-        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+        status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_cal_date_selected(self, cal, st_win, widget, info_lbl):
+    def on_edit_habit_pause_cal_date_selected(self, cal, st_win, widget, status_lbl):
         paused_until_date_dt = self.get_gtk_cal_date_to_dt(cal)
         st_win.destroy()
         widget.set_label(_('Unpause'))
         self.editing_habit['paused_until_date'] = self.dt_to_db_date(paused_until_date_dt)
-        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+        status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_btn_click(self, widget, info_lbl):
+    def on_edit_habit_pause_btn_click(self, widget, status_lbl):
         if self.editing_habit['paused_until_date']:
             widget.set_label(_('Pause'))
             self.editing_habit['paused_until_date'] = None
-            info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+            status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
         else:
             # parameters are date for calendar and whether to hide the 'Today' button
             st_win = self.get_general_calendar_window(None, True)
             st_win.set_title(_(WIN_TITLE_PAUSE_UNTIL_DATE))
             st_win.show_all()
-            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win, widget, info_lbl)
+            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win, widget, status_lbl)
 
 
     def on_edit_habit_save_btn_click(self, widget):
