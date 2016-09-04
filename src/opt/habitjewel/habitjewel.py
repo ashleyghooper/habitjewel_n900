@@ -100,6 +100,8 @@ import habitjewel_db
 
 
 # Constants
+APP_DISPLAY_NAME = 'Habit Jewel'
+APP_SYSTEM_NAME = 'habitjewel'
 WIN_PROG_IND = hildon.hildon_gtk_window_set_progress_indicator
 OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 
@@ -108,7 +110,7 @@ OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 LANDSCAPE, PORTRAIT = range(2)
 
 # Stackable Window titles
-WIN_TITLE_TOP                = 'Habit Jewel'
+WIN_TITLE_TOP                = APP_DISPLAY_NAME
 WIN_TITLE_GO_TO_DATE         = 'Go To Date'
 WIN_TITLE_PAUSE_UNTIL_DATE   = 'Pause Habit Until Date'
 WIN_TITLE_MASTER_HABITS_LIST = 'Master Habits List'
@@ -205,14 +207,14 @@ else:
 class MainWindow:
 
     def __init__(self):
-        gettext.install('habitjewel','/opt/habitjewel/share/locale')
+        gettext.install(APP_SYSTEM_NAME,'/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
         self.view_date_dt = self.get_today_dt()
 
         self.program = hildon.Program()
         self.program.__init__()
-        gtk.set_application_name('Habitjewel')
+        gtk.set_application_name(APP_NAME)
 
         # Rotation setup
         orientation = self.get_current_screen_orientation()
@@ -223,7 +225,7 @@ class MainWindow:
         self.program.add_window(self.top_win)
 
         # N900-specific
-        self.osso_app_name = 'habitjewel'
+        self.osso_app_name = SYSTEM_APP_NAME
         self.rotation_obj = self.init_autorotation()
 
         # Determine current orientation
