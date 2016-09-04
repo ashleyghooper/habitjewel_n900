@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
 #
-# HabitJewel: Track your habits
+# Habit Jewel: Track your habits
 # Copyright (c) 2016 Ashley Hooper
 # <ashleyghooper@gmail.com>
 #
@@ -214,7 +214,7 @@ class MainWindow:
 
         self.program = hildon.Program()
         self.program.__init__()
-        gtk.set_application_name(APP_NAME)
+        gtk.set_application_name(APP_DISPLAY_NAME)
 
         # Rotation setup
         orientation = self.get_current_screen_orientation()
@@ -225,7 +225,7 @@ class MainWindow:
         self.program.add_window(self.top_win)
 
         # N900-specific
-        self.osso_app_name = SYSTEM_APP_NAME
+        self.osso_app_name = APP_SYSTEM_NAME
         self.rotation_obj = self.init_autorotation()
 
         # Determine current orientation
@@ -669,9 +669,9 @@ class MainWindow:
         iter = buf.get_iter_at_offset(0)
         i_tag = buf.create_tag('i', style=pango.STYLE_ITALIC)
         b_tag = buf.create_tag('b', weight=pango.WEIGHT_BOLD)
-        buf.insert_with_tags(iter, 'HabitJewel v' + VERSION, b_tag)
+        buf.insert_with_tags(iter, APP_DISPLAY_NAME + ' v' + VERSION, b_tag)
         buf.insert(iter, ', copyright © Ashley Hooper, 2016\n\n')
-        buf.insert_with_tags(iter, 'HabitJewel', i_tag)
+        buf.insert_with_tags(iter, APP_DISPLAY_NAME, i_tag)
         buf.insert(iter, ' tracks your desired habits and their fulfillment on a regular \
 basis, helping to motivate your self-improvement.\n\n')
         buf.insert(iter, 'Habits are defined as follows:\n\n\
@@ -1066,8 +1066,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 activity_markup += str(item['target_desc']);
 
             if item['weekly_quota'] > 1:
-                activity_markup += ' [' + str(item['progress']) + '/' + \
+                activity_markup += ' [' + str(item['wk_complete_overall']) + '/' + \
                         str(item['weekly_quota']) + ']'
+
+                activity_markup += ','.join(str(pct) for pct in item['wk_complete_x_day'])
 
             self.day_habits_list_model.set(lstore_iter, \
                 TV_DAY_COL_NUM_ID, \

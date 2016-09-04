@@ -14,14 +14,11 @@ def get_habits_list_for_date(conn, view_date_dt):
 
     habits_list=[]
 
-    for row in conn.execute(
+    for h in conn.execute(
         """
         SELECT DISTINCT h.id, h.activity,
             weekly_quota,
             points, 
-            IFNULL(hs.percent_complete, -1) AS percent_complete,
-            IFNULL((SELECT SUM(IFNULL(percent_complete, 0)) * 0.01 FROM history WHERE habit_id = h.id AND STRFTIME('%W', date) = STRFTIME('%W', ?)), 0) AS progress,
-            IFNULL((points * hs.percent_complete) * 0.01, 0) AS score,
             priority,
             m.desc,
             null_measure,
@@ -36,7 +33,7 @@ def get_habits_list_for_date(conn, view_date_dt):
                     ON m.id = h.measure_id
                 LEFT JOIN history hs
                     ON hs.habit_id = h.id
-                         AND hs.date = ?
+                        AND hs.date = ?
             WHERE IFNULL(h.created_date, ?) <= ?
                 AND IFNULL(h.paused_until_date, ?) <= ?
                 AND IFNULL(h.deleted_date, ?) > ?
@@ -48,35 +45,54 @@ def get_habits_list_for_date(conn, view_date_dt):
                 -- Any others in between
                 ELSE 1
             END, priority, h.activity
-        """, [view_date_dt,   # subquery
-                view_date_dt,   # join history
+        """, [view_date_dt,   # history
                 view_date_dt, view_date_dt, # created date
                 view_date_dt, view_date_dt, # paused until date
                 view_date_dt + datetime.timedelta(days=1), view_date_dt # deleted date
                 ]
     ):
 
-        # habits_list.append(row)
-
         habit = { \
-            'id':                   row[0], \
-            'activity':             row[1], \
-            'weekly_quota':         row[2], \
-            'points':               row[3], \
-            'pct_complete':         row[4], \
-            'progress':             row[5], \
-            'score':                row[6], \
-            'priority':             row[7], \
-            'measure_desc':         row[8], \
-            'null_measure':         row[9], \
-            'unit':                 row[10], \
-            'plural':               row[11], \
-            'target':               row[12], \
-            'target_desc':          row[13], \
-            'created_date':         row[14], \
-            'paused_until_date':    row[15], \
-            'deleted_date':         row[16] \
+            'id':                   h[0], \
+            'activity':             h[1], \
+            'weekly_quota':         h[2], \
+            'points':               h[3], \
+            'priority':             h[4], \
+            'measure_desc':         h[5], \
+            'null_measure':         h[6], \
+            'unit':                 h[7], \
+            'plural':               h[8], \
+            'target':               h[9], \
+            'target_desc':          h[10], \
+            'created_date':         h[11], \
+            'paused_until_date':    h[12], \
+            'deleted_date':         h[13] \
         }
+
+        day_percent_complete = -1
+        wk_complete_x_day = []
+        wk_complete_overall = 0
+        for wk_hs in conn.execute(
+            """
+            SELECT DISTINCT date,
+                            percent_complete
+              FROM history
+             WHERE habit_id = ?
+               AND STRFTIME('%W', date) = STRFTIME('%W', ?)
+             ORDER BY date
+            """, [h[0], view_date_dt]
+        ):
+            # If history record is for the current day, set it
+            if wk_hs[0] == view_date_dt.strftime('%Y-%m-%d'):
+                day_percent_complete = wk_hs[1]
+            wk_complete_x_day.append(wk_hs[1])
+            wk_complete_overall += wk_hs[1] * 0.01
+
+        habit['pct_complete'] = day_percent_complete
+        habit['wk_complete_x_day'] = wk_complete_x_day
+        habit['wk_complete_overall'] = wk_complete_overall
+
+        # Add the habit to the list
         habits_list.append(habit)
 
     return habits_list
