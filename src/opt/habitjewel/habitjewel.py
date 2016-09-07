@@ -19,10 +19,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.5.0'
+VERSION = '0.6.0' # (major.minor.patch)
+
+# Minor version changes each time database schema changes 
 
 """
 CHANGELOG:
+v0.6.0
+* Added initial support for displaying completion of habit for previous days
+
 v0.5.0
 * Added New Habit button and 'clone habit' tap and hold option in MHL
 * Added habit parameters preview on habit editing screen
@@ -181,20 +186,11 @@ time.tzset()
 
 # User data initialisation
 home = os.path.expanduser('~')
-config_dir = home + '/.habitjewel/'
-db_file = config_dir + 'database'
-log_file = config_dir + 'log.txt'
+config_dir = home + '/.habitjewel'
 
-# Check for config dir, database. Create if necessary
+# Check for config dir
 if not os.path.exists(config_dir):
     os.mkdir(config_dir)
-
-if os.path.exists(db_file):
-    conn = sqlite3.connect(db_file)
-else:
-    conn = sqlite3.connect(db_file)
-    print 'creating new database'
-    habitjewel_db.create_new_database(conn)
 
 
 
@@ -207,6 +203,8 @@ else:
 class MainWindow:
 
     def __init__(self):
+        self.db = habitjewel_db.HabitJewelDb(config_dir, VERSION)
+
         gettext.install(APP_SYSTEM_NAME,'/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
@@ -364,14 +362,12 @@ class MainWindow:
 
 
     def set_db_habit_deleted_date(self, habit, deleted_date_dt):
-        habitjewel_db.delete_habit(conn, habit['id'])
+        self.db.delete_habit(habit['id'])
         self.show_info_banner(self.top_win, '"' + habit['activity'] + '" deleted')
 
 
     def set_db_habit_paused_until_date (self, habit, paused_until_date_dt):
-        habitjewel_db.set_habit_paused_until_date (conn,
-                habit['id'], paused_until_date_dt
-            )
+        self.db.set_habit_paused_until_date (habit['id'], paused_until_date_dt)
         if paused_until_date_dt:
             self.show_info_banner(self.top_win, '"' + habit['activity'] + '" paused until ' + self.dt_to_display_date(paused_until_date_dt))
         else:
@@ -765,7 +761,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def fetch_master_habits_list(self):
-        return habitjewel_db.get_habits_list_all(conn)
+        return self.db.get_habits_list_all()
 
 
     def add_columns_to_master_habits_list_tv(self, treeview):
@@ -898,7 +894,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             return
         else:
             new_activity = self.touched_habit['activity'] + ' (' + _('copy') + ')'
-            habitjewel_db.clone_habit(conn, self.touched_habit['id'], new_activity)
+            self.db.clone_habit(self.touched_habit['id'], new_activity)
             self.redraw_master_habits_list()
 
 
@@ -906,7 +902,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         if not self.touched_habit:
             return
         else:
-            habitjewel_db.delete_habit(conn, self.touched_habit['id'])
+            self.db.delete_habit(self.touched_habit['id'])
             self.redraw_master_habits_list()
 
 
@@ -1052,7 +1048,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def fetch_habits_list_for_date(self, view_date_dt):
-        return habitjewel_db.get_habits_list_for_date(conn, view_date_dt)
+        return self.db.get_habits_list_for_date(view_date_dt)
 
 
     def populate_day_habits_list_ls(self, day_habits_list):
@@ -1258,9 +1254,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def set_habit_percent_complete (self, habit_id, view_date_dt, percent_complete):
-        habitjewel_db.set_habit_pct_complete (conn,
-                habit_id, view_date_dt, percent_complete
-            )
+        self.db.set_habit_pct_complete (habit_id, view_date_dt, percent_complete)
 
 
     def on_status_cmenu_pct_selected (self, pct_complete):
@@ -1307,7 +1301,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
     def habit_edit_window(self, habit):
 
         # Get categories
-        categories = habitjewel_db.get_categories_list(conn)
+        categories = self.db.get_categories_list()
 
         self.edit_win = hildon.StackableWindow()
         vbox = gtk.VBox()
@@ -1443,7 +1437,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def set_target_picker_visibility(self):
-        if habitjewel_db.is_null_measure(conn, self.editing_habit['measure_desc']):
+        if self.db.is_null_measure(self.editing_habit['measure_desc']):
             self.edit_habit_target_picker.hide();
         else:
             self.edit_habit_target_picker.show();
@@ -1520,7 +1514,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def create_measures_selector(self, selected_measure = None):
-        measures = habitjewel_db.get_measures_list(conn)
+        measures = self.db.get_measures_list()
         selector = hildon.TouchSelector(text = True)
         index = 0
         for measure in measures:
@@ -1537,7 +1531,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         if self.editing_habit['measure_desc'] != NULL_MEASURE_DESC:
             self.editing_habit['null_measure'] = '0'
             measure_id, unit, plural = \
-                    habitjewel_db.get_measure(conn, self.editing_habit['measure_desc'])
+                    self.db.get_measure(self.editing_habit['measure_desc'])
             self.editing_habit['unit'] = unit
             self.editing_habit['plural'] = plural
         else:
@@ -1632,7 +1626,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     valid = False
 
         if valid:
-            habitjewel_db.save_habit(conn, self.editing_habit)
+            self.db.save_habit(self.editing_habit)
             self.show_info_banner(self.top_win, 'Habit "' + self.editing_habit['activity'] + '" saved')
             self.edit_win.destroy()
             self.redraw_day_habits_list()
@@ -1649,15 +1643,15 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.editing_habit = None
 
 
-
-
-
 ###################
 # end of MainWindow 
 ###################
 
 
-if __name__ == "__main__":
+
+
+
+if __name__ == '__main__':
     MainWindow = MainWindow()
     #gtk.gdk.threads_enter()
     gtk.main()
