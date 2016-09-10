@@ -19,12 +19,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.6.0' # (major.minor.patch)
+VERSION = '0.6.1' # (major.minor.patch)
 
 # Minor version changes each time database schema changes 
 
 """
 CHANGELOG:
+v0.6.1
+* Refactored history gathering
+* Tweaked mini bar graph display
+* Disabled main menu Stats button (for now)
+
 v0.6.0
 * Added mini bar-graphs next to each habit which display completion status for previous days
 * Created HabitJewelDB class and moved all database functions there
@@ -179,7 +184,7 @@ HISTORY_CLEAR_PIXBUF_FILE   = "checkbox_unchecked.png"
 
 # Habit recent history graph size
 HABIT_RECENT_HIST_PIXBUF_SIZE = 48
-HABIT_RECENT_HIST_BAR_HEIGHT  = 40
+HABIT_RECENT_HIST_BAR_HEIGHT  = 32
 
 # Master Habits List status icons
 MASTER_STATUS_DELETED_PIXBUF_FILE = "habit_deleted.png"
@@ -533,9 +538,12 @@ class MainWindow:
         button.connect('clicked', self.on_main_menu_go_to_date_click)
         menu.append(button)
 
+        # Stats page not yet implemented
+        """
         button = gtk.Button(_('Stats'))
         button.connect('clicked', self.on_main_menu_stats_click)
         menu.append(button)
+        """
 
         button = gtk.Button(_('Master Habits list'))
         button.connect('clicked', self.on_main_menu_master_habits_list_click)
@@ -1063,7 +1071,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 activity_markup += str(item['target_desc']);
 
             if item['weekly_quota'] > 1:
-                activity_markup += ' [ ' + str(item['wk_complete_overall']) + '/' + \
+                activity_markup += ' [ ' + str(item['completion_total']) + '/' + \
                         str(item['weekly_quota']) + ' ]'
 
             # Render the last 7 days history graph for the habit
@@ -1073,34 +1081,36 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             pixmap, mask = pixbuf.render_pixmap_and_mask()
 
             pixmap = gtk.gdk.Pixmap(None, HABIT_RECENT_HIST_PIXBUF_SIZE, \
-                    HABIT_RECENT_HIST_BAR_HEIGHT, 16)
+                    HABIT_RECENT_HIST_BAR_HEIGHT + 8, 16)
             cr = pixmap.cairo_create()
 
             # Graph previous 7 days' history for habit, [0:7] returns all but view date
-            for index, day in enumerate(item['completion_by_day'][0:7]):
+            #for day in sorted(item['history'][:-1]):
+            for index, day in enumerate(sorted(item['history'])[0:7]):
+                completion = item['history'][day]
                 # If we have history for this day...
-                if len(day) > 0:
+                if len(completion) > 0:
 
                     # If missed show red bar, height of 1
-                    if day[0] == 0:
+                    if completion[0] == 0:
                         rgb = [0.9, 0.0, 0.0]
-                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
-                        bar_h = 1
+                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT
+                        bar_h = 4
 
                     # For all other results
                     else:
                         # If from preceding week, draw in grey
-                        if day[1] < 0:
+                        if completion[1] < 0:
                             rgb = [0.3, 0.3, 0.3]
-                        # Otherwise, green
+                        # Otherwise, based on completion status
                         else:
-                            red = (100 - day[0]) * 0.01 
-                            green = day[0] * 0.01 
+                            red = (100 - completion[0]) * 0.01
+                            green = (completion[0] * 0.004) + 0.6
                             blue = 0.0
                             rgb = [red, green, blue]
 
-                        bar_y = (100 - day[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
-                        bar_h = day[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_y = (100 - completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_h = completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
 
                 # Draw a placeholder since we have no history for this day
                 else:
@@ -1110,8 +1120,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
                 # Draw the bar
                 cr.set_source_rgb(rgb[0], rgb[1], rgb[2])
-                cr.rectangle(index * 7, bar_y, 5, bar_h)
+                cr.rectangle(index * 7, bar_y + 4, 5, bar_h)
                 cr.fill()
+
 
             # Turn pixmap back into pixbuf for Treeview column
             pixbuf.get_from_drawable(pixmap, gtk.gdk.colormap_get_system(), \

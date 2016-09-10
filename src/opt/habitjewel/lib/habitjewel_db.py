@@ -64,6 +64,7 @@ class HabitJewelDb:
                 unit, plural,
                 target,
                 target || ' ' || CASE WHEN target > 1 THEN plural ELSE unit END AS target_desc,
+                IFNULL(hs.percent_complete, -1) AS percent_complete,
                 h.created_date,
                 paused_until_date,
                 h.deleted_date
@@ -102,58 +103,78 @@ class HabitJewelDb:
                 'plural':               h[7], \
                 'target':               h[8], \
                 'target_desc':          h[9], \
-                'created_date':         h[10], \
-                'paused_until_date':    h[11], \
-                'deleted_date':         h[12] \
+                'pct_complete':         h[10], \
+                'created_date':         h[11], \
+                'paused_until_date':    h[12], \
+                'deleted_date':         h[13] \
             }
     
-            day_percent_complete = -1
-            view_date_minus_week_dt = view_date_dt - datetime.timedelta(7)
-            habit_prec_7d = {}
-            # Get rid
-            wk_complete_overall = 0
+            start_date_dt = view_date_dt - datetime.timedelta(7)
+            end_date_dt = view_date_dt
 
-            for wk_hs in self.conn.execute(
-                """
-                SELECT DISTINCT date,
-                                percent_complete,
-                                CASE WHEN STRFTIME('%W', date) = STRFTIME('%W', ?) 
-                                    THEN 0
-                                ELSE
-                                    -1
-                                END AS week_offset
-                  FROM history
-                 WHERE habit_id = ?
-                   AND date BETWEEN ? AND ?
-                 ORDER BY date
-                """, [view_date_dt, habit['id'], view_date_minus_week_dt, view_date_dt]
-            ):
-                pc_date      = wk_hs[0]
-                pc_percent   = wk_hs[1]
-                pc_wk_offset = wk_hs[2]
-                habit_prec_7d[pc_date] = [pc_percent, pc_wk_offset]
-                # If history record is for the current day, set it
-                if pc_date == view_date_dt.strftime('%Y-%m-%d'):
-                    day_percent_complete = pc_percent
+            history = self.get_habit_history(habit['id'], start_date_dt, end_date_dt)
+            completion_total = self.get_habit_completion_total(habit['id'], \
+                    start_date_dt, end_date_dt) * 0.01
 
-            completion_by_day = []
-            for day_dt in self.date_range(view_date_minus_week_dt, view_date_dt):
-                db_date = day_dt.strftime('%Y-%m-%d')
-                if db_date in habit_prec_7d:
-                    completion_by_day.append(habit_prec_7d[db_date])
-                    if habit_prec_7d[db_date][1] == 0:
-                        wk_complete_overall += habit_prec_7d[db_date][0] * 0.01
-                else:
-                    completion_by_day.append([])
-
-            habit['pct_complete'] = day_percent_complete
-            habit['completion_by_day'] = completion_by_day
-            habit['wk_complete_overall'] = wk_complete_overall
+            habit['history'] = history
+            print str(history)
+            habit['completion_total'] = completion_total
 
             # Add the habit to the list
             habits_list.append(habit)
     
         return habits_list
+
+
+    def get_habit_history(self, habit_id, start_date_dt, end_date_dt):
+        hist_rows = {}
+        for hist_row in self.conn.execute(
+            """
+            SELECT DISTINCT date,
+                            percent_complete,
+                            STRFTIME('%W', date) - STRFTIME('%W', ?) AS week_offset
+              FROM history
+             WHERE habit_id = ?
+               AND date BETWEEN ? AND ?
+             ORDER BY date
+            """, [end_date_dt, habit_id, start_date_dt, end_date_dt]
+        ):
+            date        = hist_row[0]
+            percent     = hist_row[1]
+            week_offset = hist_row[2]
+            hist_rows[date] = [percent, week_offset]
+            """
+            # If history record is for the current day, set it
+            if pc_date == view_date_dt.strftime('%Y-%m-%d'):
+                day_percent_complete = pc_percent
+                if history[db_date][1] == 0:
+                    wk_complete_overall += history[db_date][0] * 0.01
+            """
+
+        completion_by_day = {}
+        for day_dt in self.date_range(start_date_dt, end_date_dt):
+            db_date = day_dt.strftime('%Y-%m-%d')
+            if db_date in hist_rows:
+                completion_by_day[db_date] = hist_rows[db_date]
+            else:
+                completion_by_day[db_date] = []
+
+        return completion_by_day
+
+
+    def get_habit_completion_total(self, habit_id, start_date_dt, end_date_dt):
+        cursor = self.conn.execute(
+            """
+            SELECT IFNULL(SUM(percent_complete), 0)
+              FROM history
+             WHERE habit_id = ?
+               AND date BETWEEN ? AND ?
+               AND STRFTIME('%W', date) = STRFTIME('%W', ?)
+            """, [habit_id, start_date_dt, end_date_dt, end_date_dt])
+    
+        row = cursor.fetchone()
+
+        return row[0]
     
     
     def get_habits_list_all(self):

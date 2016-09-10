@@ -4,7 +4,7 @@ import pypackager
 import os
 p=pypackager.PyPackager("habitjewel") #package name
 p.display_name = 'HabitJewel' #package display name in HAM
-p.version = '0.6.0' #package version
+p.version = '0.6.1' #package version
 p.buildversion = 'local1' #package build version
 p.description="""Record and track your progress in achieving your daily habits.""" #package description
 p.author='Ashley Hooper' #package author
@@ -31,9 +31,9 @@ chmod 755 /opt/habitjewel/habitjewel.py
 
 #p.postremove="""#!/bin/sh
 #"""
-p.changelog ="""* Added mini bar-graphs next to each habit which display completion status for previous days
-* Created HabitJewelDB class and moved all database functions there
-* Added schema version check and upgrade script for schema vers 0.4 and 0.5
+p.changelog ="""* Refactored history gathering
+* Tweaked mini bar graph display
+* Disabled main menu Stats button (for now)
 """ # the changelog
 dir_name='src' #src directory name
 #Here we will loop in all files, directory in src to add it to pkg
