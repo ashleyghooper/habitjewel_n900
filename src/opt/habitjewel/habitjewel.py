@@ -26,7 +26,9 @@ VERSION = '0.6.0' # (major.minor.patch)
 """
 CHANGELOG:
 v0.6.0
-* Added initial support for displaying completion of habit for previous days
+* Added mini bar-graphs next to each habit which display completion status for previous days
+* Created HabitJewelDB class and moved all database functions there
+* Added schema version check and upgrade script for schema vers 0.4 and 0.5
 
 v0.5.0
 * Added New Habit button and 'clone habit' tap and hold option in MHL
@@ -81,6 +83,7 @@ TODO:
 """
 
 import datetime
+import cairo
 import calendar
 import fcntl
 import gettext
@@ -125,8 +128,8 @@ WIN_TITLE_ABOUT              = 'About HabitJewel'
 
 # Gtk CellRenderer wrapping widths
 # Day Habit List
-TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 700
-TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT = 380
+TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 650
+TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT = 360
 # Master Habit List
 TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 550
 TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE = 250
@@ -139,9 +142,11 @@ TV_DAY_COL_NUM_ID             = 0
 TV_DAY_COL_NAME_ID            = 'ID'
 TV_DAY_COL_NUM_ACTIVITY       = 1
 TV_DAY_COL_NAME_ACTIVITY      = 'Activity'
-TV_DAY_COL_NUM_CHECKBOX       = 2
+TV_DAY_COL_NUM_HISTICON       = 2
+TV_DAY_COL_NAME_HISTICON      = 'History'
+TV_DAY_COL_NUM_CHECKBOX       = 3
 TV_DAY_COL_NAME_CHECKBOX      = 'Checkbox'
-TV_DAY_COL_NUM_PCT_COMPLETE   = 3
+TV_DAY_COL_NUM_PCT_COMPLETE   = 4
 TV_DAY_COL_NAME_PCT_COMPLETE  = 'Percent complete'
 
 # Day habits list treeview column indexes and titles
@@ -171,6 +176,10 @@ HISTORY_MISSED_PCT          = 0
 HISTORY_MISSED_PIXBUF_FILE  = "checkbox_crossed.png"
 HISTORY_CLEAR_PCT           = -1
 HISTORY_CLEAR_PIXBUF_FILE   = "checkbox_unchecked.png"
+
+# Habit recent history graph size
+HABIT_RECENT_HIST_PIXBUF_SIZE = 48
+HABIT_RECENT_HIST_BAR_HEIGHT  = 40
 
 # Master Habits List status icons
 MASTER_STATUS_DELETED_PIXBUF_FILE = "habit_deleted.png"
@@ -987,14 +996,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         self.pan_area.add(self.day_habits_list_tv)
 
-        """
-        if first_run:
-            vbox_first_run = gtk.VBox()
-            first_run_label = gtk.Label(_('No habits'))
-            vbox_first_run.pack_start(first_run_label) 
-            self.pan_area.add(vbox_first_run)
-        """
-
         self.vbox_outer.pack_start(self.vbox_nav, False)
         self.vbox_outer.pack_start(self.pan_area, True, True)
 
@@ -1042,7 +1043,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def create_day_habits_list_model(self):
-        lstore = gtk.ListStore(int, str, gtk.gdk.Pixbuf, int, str)
+        lstore = gtk.ListStore(int, str, gtk.gdk.Pixbuf, gtk.gdk.Pixbuf, int, str)
         # add columns to the tree view
         return lstore
 
@@ -1062,16 +1063,68 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 activity_markup += str(item['target_desc']);
 
             if item['weekly_quota'] > 1:
-                activity_markup += ' [' + str(item['wk_complete_overall']) + '/' + \
-                        str(item['weekly_quota']) + ']'
+                activity_markup += ' [ ' + str(item['wk_complete_overall']) + '/' + \
+                        str(item['weekly_quota']) + ' ]'
 
-                activity_markup += ','.join(str(pct) for pct in item['wk_complete_x_day'])
+            # Render the last 7 days history graph for the habit
+            pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
+                    HABIT_RECENT_HIST_PIXBUF_SIZE, HABIT_RECENT_HIST_PIXBUF_SIZE)
+            pixbuf.fill(0x00000000)
+            pixmap, mask = pixbuf.render_pixmap_and_mask()
 
+            pixmap = gtk.gdk.Pixmap(None, HABIT_RECENT_HIST_PIXBUF_SIZE, \
+                    HABIT_RECENT_HIST_BAR_HEIGHT, 16)
+            cr = pixmap.cairo_create()
+
+            # Graph previous 7 days' history for habit, [0:7] returns all but view date
+            for index, day in enumerate(item['completion_by_day'][0:7]):
+                # If we have history for this day...
+                if len(day) > 0:
+
+                    # If missed show red bar, height of 1
+                    if day[0] == 0:
+                        rgb = [0.9, 0.0, 0.0]
+                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
+                        bar_h = 1
+
+                    # For all other results
+                    else:
+                        # If from preceding week, draw in grey
+                        if day[1] < 0:
+                            rgb = [0.3, 0.3, 0.3]
+                        # Otherwise, green
+                        else:
+                            red = (100 - day[0]) * 0.01 
+                            green = day[0] * 0.01 
+                            blue = 0.0
+                            rgb = [red, green, blue]
+
+                        bar_y = (100 - day[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_h = day[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+
+                # Draw a placeholder since we have no history for this day
+                else:
+                    rgb = [0.3, 0.3, 0.3]
+                    bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
+                    bar_h = 1
+
+                # Draw the bar
+                cr.set_source_rgb(rgb[0], rgb[1], rgb[2])
+                cr.rectangle(index * 7, bar_y, 5, bar_h)
+                cr.fill()
+
+            # Turn pixmap back into pixbuf for Treeview column
+            pixbuf.get_from_drawable(pixmap, gtk.gdk.colormap_get_system(), \
+                    0, 0, 0, 4, -1, -1)
+
+            # Add the row to the list store
             self.day_habits_list_model.set(lstore_iter, \
                 TV_DAY_COL_NUM_ID, \
                     item['id'], \
                 TV_DAY_COL_NUM_ACTIVITY, \
                     activity_markup, \
+                TV_DAY_COL_NUM_HISTICON, \
+                    pixbuf, \
                 TV_DAY_COL_NUM_CHECKBOX, \
                     checkbox_pixbuf, \
                 TV_DAY_COL_NUM_PCT_COMPLETE, \
@@ -1103,12 +1156,18 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         treeview.append_column(column)
 
         # column for activity
-        renderer = gtk.CellRendererText()
-        renderer.set_property('wrap-mode', gtk.WRAP_WORD)
-        renderer.set_property('wrap-width', self.tv_day_activity_wrap_width)
-        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_ACTIVITY, renderer, markup=TV_DAY_COL_NUM_ACTIVITY)
+        rend = gtk.CellRendererText()
+        rend.set_property('wrap-mode', gtk.WRAP_WORD)
+        rend.set_property('wrap-width', self.tv_day_activity_wrap_width)
+        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_ACTIVITY, rend, markup=TV_DAY_COL_NUM_ACTIVITY)
         column.set_property('expand', True)
         #column.tap_and_hold_setup(self.day_habits_list_menu)
+        treeview.append_column(column)
+
+        # column for history
+        rend = gtk.CellRendererPixbuf()
+        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_HISTICON, rend, pixmap=TV_DAY_COL_NUM_HISTICON)
+        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_HISTICON, rend, pixbuf=TV_DAY_COL_NUM_HISTICON)
         treeview.append_column(column)
 
         # column for checkbox
@@ -1116,6 +1175,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         #checkbox.connect('clicked', self.habit_toggled, treeview)
         checkbox = gtk.CellRendererPixbuf()
         column = gtk.TreeViewColumn(TV_DAY_COL_NAME_CHECKBOX, checkbox, pixbuf=TV_DAY_COL_NUM_CHECKBOX)
+        # Make the column a little wider to make it easier to press on
         column.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
         column.set_fixed_width(80)
         treeview.append_column(column)

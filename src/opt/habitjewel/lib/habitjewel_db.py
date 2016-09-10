@@ -6,6 +6,9 @@ import hildon
 import os
 import sqlite3
 
+# For backing up database before schema upgrade
+from shutil import copyfile
+
 
 class HabitJewelDb:
 
@@ -20,15 +23,26 @@ class HabitJewelDb:
 
         # Prepare connection
         db_file = config_dir + '/database'
-        self.conn = sqlite3.connect(db_file)
 
         # Create the database
         if os.path.exists(db_file):
             print 'checking database schema version'
-            self.check_and_upgrade_schema(code_schema_ver)
+            self.conn = sqlite3.connect(db_file)
+            self.check_and_upgrade_schema(db_file, code_schema_ver)
         else:
             print 'creating new database for schema version ' + code_schema_ver
+            self.conn = sqlite3.connect(db_file)
             self.create_new_database(code_schema_ver)
+
+
+    # Iterate through a date range between two dates
+    def date_range(self, start_date, end_date):
+        if start_date <= end_date:
+            for n in range( ( end_date - start_date ).days + 1 ):
+                yield start_date + datetime.timedelta( n )
+        else:
+            for n in range( ( start_date - end_date ).days + 1 ):
+                yield start_date - datetime.timedelta( n )
 
     
     ##Return the details of all habits for the current view date
@@ -94,28 +108,48 @@ class HabitJewelDb:
             }
     
             day_percent_complete = -1
-            wk_complete_x_day = []
+            view_date_minus_week_dt = view_date_dt - datetime.timedelta(7)
+            habit_prec_7d = {}
+            # Get rid
             wk_complete_overall = 0
+
             for wk_hs in self.conn.execute(
                 """
                 SELECT DISTINCT date,
-                                percent_complete
+                                percent_complete,
+                                CASE WHEN STRFTIME('%W', date) = STRFTIME('%W', ?) 
+                                    THEN 0
+                                ELSE
+                                    -1
+                                END AS week_offset
                   FROM history
                  WHERE habit_id = ?
-                   AND STRFTIME('%W', date) = STRFTIME('%W', ?)
+                   AND date BETWEEN ? AND ?
                  ORDER BY date
-                """, [h[0], view_date_dt]
+                """, [view_date_dt, habit['id'], view_date_minus_week_dt, view_date_dt]
             ):
+                pc_date      = wk_hs[0]
+                pc_percent   = wk_hs[1]
+                pc_wk_offset = wk_hs[2]
+                habit_prec_7d[pc_date] = [pc_percent, pc_wk_offset]
                 # If history record is for the current day, set it
-                if wk_hs[0] == view_date_dt.strftime('%Y-%m-%d'):
-                    day_percent_complete = wk_hs[1]
-                wk_complete_x_day.append(wk_hs[1])
-                wk_complete_overall += wk_hs[1] * 0.01
-    
+                if pc_date == view_date_dt.strftime('%Y-%m-%d'):
+                    day_percent_complete = pc_percent
+
+            completion_by_day = []
+            for day_dt in self.date_range(view_date_minus_week_dt, view_date_dt):
+                db_date = day_dt.strftime('%Y-%m-%d')
+                if db_date in habit_prec_7d:
+                    completion_by_day.append(habit_prec_7d[db_date])
+                    if habit_prec_7d[db_date][1] == 0:
+                        wk_complete_overall += habit_prec_7d[db_date][0] * 0.01
+                else:
+                    completion_by_day.append([])
+
             habit['pct_complete'] = day_percent_complete
-            habit['wk_complete_x_day'] = wk_complete_x_day
+            habit['completion_by_day'] = completion_by_day
             habit['wk_complete_overall'] = wk_complete_overall
-    
+
             # Add the habit to the list
             habits_list.append(habit)
     
@@ -402,7 +436,7 @@ class HabitJewelDb:
         self.conn.commit()
     
     
-    def check_and_upgrade_schema(self, code_schema_ver):
+    def check_and_upgrade_schema(self, db_file, code_schema_ver):
         # Get current schema version
         cursor = self.conn.execute(
             """
@@ -424,6 +458,12 @@ class HabitJewelDb:
         else:
             if db_schema_ver == '0.5' or db_schema_ver == '0.4':
         
+                cursor.close()
+                self.conn.close()
+                print "Backing up current database..."
+                copyfile(db_file, db_file + '_ver_' + db_schema_ver + '.backup')
+
+                self.conn = sqlite3.connect(db_file)
                 print 'Upgrading database schema to version ' + code_schema_ver + '...'
 
                 # Remove points column from habits audit table
@@ -532,7 +572,7 @@ class HabitJewelDb:
     def create_new_database(self, code_schema_ver):
         cursor = self.conn.cursor()
     
-        code_ver_arr = code_version_str.split('.')
+        code_ver_arr = code_schema_ver.split('.')
         code_ver = code_ver_arr[0] + '.' + code_ver_arr[1]
     
         # Table to track schema changes for upgrading between incompatible versions
