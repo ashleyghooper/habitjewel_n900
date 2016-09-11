@@ -1409,12 +1409,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.timer_win = hildon.StackableWindow()
         vbox = gtk.VBox()
 
-        if len(habit['activity']) > 28:
-            activity_disp = habit['activity'][0:26] + '...'
-        else:
-            activity_disp = habit['activity']
-
-        win_title = _('Timer for') + ' ' + activity_disp
+        win_title = _('Habit Jewel Timer')
 
         activity_tbl = gtk.Table(2, 2, False)
         activity_tbl.set_row_spacings(5)
@@ -1424,13 +1419,13 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         a_entry = gtk.Label(habit['activity'])
         a_entry.set_justify(gtk.JUSTIFY_LEFT)
         activity_tbl.attach(a_lbl, 0, 1, 0, 1)
-        activity_tbl.attach(a_entry, 1, 2, 0, 1)
+        activity_tbl.attach(a_entry, 1, 2, 0, 1, gtk.EXPAND|gtk.FILL)
 
         t_lbl = gtk.Label(_('Target:'))
         t_entry = gtk.Label(habit['target_desc'])
         t_entry.set_justify(gtk.JUSTIFY_LEFT)
         activity_tbl.attach(t_lbl, 0, 1, 1, 2)
-        activity_tbl.attach(t_entry, 1, 2, 1, 2)
+        activity_tbl.attach(t_entry, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL)
 
         hbox_controls = gtk.HBox(True)
 
@@ -1486,11 +1481,23 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
     def on_start_stop_timer_btn_click(self, win):
         if 'running' in self.timer:
             self.timer.pop('running', None)
+        else:
+            self.timer['running'] = True
+            gobject.timeout_add(1000, self.timer_countdown)
+            self.timer_countdown()
 
 
     def on_start_stop_timer_time_changed(self, widget):
         if not 'running' in self.timer:
             self.timer['remaining'] = self.timer_adj.get_value() * 60
+        else:
+            self.timer_adj.set_value(self.timer['remaining'] * 0.016666666)
+
+
+    def timer_countdown(self):
+        if self.timer['remaining'] > 0:
+            print "NOP"
+            #self.timer_label.set_text
 
 
     def on_timer_window_destroy(self, win):
