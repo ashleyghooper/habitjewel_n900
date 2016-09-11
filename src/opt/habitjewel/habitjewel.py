@@ -19,12 +19,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.6.1' # (major.minor.patch)
+VERSION = '0.7.0' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 
 """
 CHANGELOG:
+
+v0.7.0
+* Start on countdown timer
+
 v0.6.1
 * Refactored history gathering
 * Tweaked mini bar graph display
@@ -254,6 +258,9 @@ class MainWindow:
         menu = self.setup_main_menu()
         self.top_win.set_app_menu(menu)
         self.setup_popup_menus()
+
+        # Initialise Timer
+        self.timer = {}
 
         self.top_container = self.get_day_habits_list_container()
         self.top_win.add(self.top_container)
@@ -614,15 +621,21 @@ class MainWindow:
         return self.get_generated_hildon_context_menu(menu_def)
 
 
-    def get_day_status_cmenu(self):
-        menu_def = [ \
+    def get_day_status_cmenu(self, show_open_timer = False):
+        menu_def = []
+        if show_open_timer:
+            menu_def.extend([ \
+                    ['Open Timer', self.on_status_cmenu_open_timer_selected], \
+            ])
+
+        menu_def.extend([ \
                 ['Done', self.on_status_cmenu_done_selected], \
                 ['75%', self.on_status_cmenu_75pct_selected], \
                 ['50%', self.on_status_cmenu_50pct_selected], \
                 ['25%', self.on_status_cmenu_25pct_selected], \
-                ['Missed', self.on_status_cmenu_missed_selected], \
                 ['Clear', self.on_status_cmenu_clear_selected], \
-        ]
+                ['Missed', self.on_status_cmenu_missed_selected], \
+        ])
 
         return self.get_generated_hildon_context_menu(menu_def)
 
@@ -1014,7 +1027,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         if not self.touched_tv_col_title:
             return
         if self.touched_tv_col_title == TV_DAY_COL_NAME_ACTIVITY:
-            # gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_activity_cmenu)
             gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_activity_cmenu)
         elif self.touched_tv_col_title == TV_DAY_COL_NAME_CHECKBOX:
             gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_status_cmenu)
@@ -1034,17 +1046,32 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             for habit in self.day_habits_list:
                 if habit['id'] == index:
                     self.touched_habit = habit
+                    today_dt = self.get_today_dt()
+
                     show_unpause = False
+                    show_open_timer = False
+
                     if habit['paused_until_date']:
                         paused_until_date_dt = self.db_date_to_dt(habit['paused_until_date'])
-                        today_dt = self.get_today_dt()
                         if paused_until_date_dt > today_dt:
                             show_unpause = True
-                    
+
+                    if habit['to_minutes'] and self.view_date_dt == today_dt:
+                        show_open_timer = True
+
+
+                    # Refresh the activity context menu to show the unpause option
                     if show_unpause:
                         self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True, True)
                     else:
                         self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
+                    
+
+                    # Refresh the status context menu to show the start timer option
+                    if show_open_timer:
+                        self.h_tv_day_status_cmenu = self.get_day_status_cmenu(True)
+                    else:
+                        self.h_tv_day_status_cmenu = self.get_day_status_cmenu()
                     break
         else:
             self.touched_habit = None
@@ -1246,11 +1273,11 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.populate_day_habits_list_ls(self.day_habits_list)
         today = datetime.date.today()
 
-        # Hide the pause menu if not viewing the current day
-        if self.view_date_dt != today:
-            self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True)
-        else:
+        # If viewing the current day, show the pause menu and timer option
+        if self.view_date_dt == today:
             self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
+        else:
+            self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True)
 
         # Hide checkbox column for dates in the future
         checkbox_col = self.day_habits_list_tv.get_column(TV_DAY_COL_NUM_CHECKBOX)
@@ -1328,6 +1355,15 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.db.set_habit_pct_complete (habit_id, view_date_dt, percent_complete)
 
 
+    def on_status_cmenu_open_timer_selected (self, menu_item):
+        if not self.touched_habit:
+            return
+        else:
+            habit = self.touched_habit
+            # Initialise the timer window
+            self.timer_window(habit)
+
+
     def on_status_cmenu_pct_selected (self, pct_complete):
         if not self.touched_habit:
             return
@@ -1364,13 +1400,113 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
 
+    ##################################
+    # Countdown timer window functions
+    ##################################
+
+
+    def timer_window(self, habit):
+        self.timer_win = hildon.StackableWindow()
+        vbox = gtk.VBox()
+
+        if len(habit['activity']) > 28:
+            activity_disp = habit['activity'][0:26] + '...'
+        else:
+            activity_disp = habit['activity']
+
+        win_title = _('Timer for') + ' ' + activity_disp
+
+        activity_tbl = gtk.Table(2, 2, False)
+        activity_tbl.set_row_spacings(5)
+        activity_tbl.set_col_spacings(5)
+
+        a_lbl = gtk.Label(_('Timer for:'))
+        a_entry = gtk.Label(habit['activity'])
+        a_entry.set_justify(gtk.JUSTIFY_LEFT)
+        activity_tbl.attach(a_lbl, 0, 1, 0, 1)
+        activity_tbl.attach(a_entry, 1, 2, 0, 1)
+
+        t_lbl = gtk.Label(_('Target:'))
+        t_entry = gtk.Label(habit['target_desc'])
+        t_entry.set_justify(gtk.JUSTIFY_LEFT)
+        activity_tbl.attach(t_lbl, 0, 1, 1, 2)
+        activity_tbl.attach(t_entry, 1, 2, 1, 2)
+
+        hbox_controls = gtk.HBox(True)
+
+        # When timer is running, display
+        if 'running' in self.timer:
+            start_stop_lbl = _('Stop Timer')
+        else:
+            start_stop_lbl = _('Start Timer')
+
+            # Set slider initial value (current remaining time in mins if existing timer)
+            if 'remaining' in self.timer:
+                remain_mins = remaining / 60
+            else:
+                # Calculate remaining time based on percent already complete and target
+                remain_mins = (100 - habit['pct_complete']) * \
+                        (habit['target'] * habit['to_minutes']) * 0.01
+
+            self.timer_adj = gtk.Adjustment(remain_mins, 1, habit['target'] * habit['to_minutes'] * 2, 0, 1)
+            scale = gtk.HScale(self.timer_adj)
+            scale.set_digits(0)
+            scale.connect('value_changed', self.on_start_stop_timer_time_changed)
+
+            vbox_scale = gtk.VBox(True)
+            scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
+            vbox_scale.pack_start(scale_lbl, True, False) 
+            vbox_scale.pack_start(scale, True, False) 
+
+            hbox_controls.pack_start(vbox_scale, True, False) 
+        
+
+        start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        start_stop_btn.set_label(start_stop_lbl)
+        start_stop_btn.connect('clicked', self.on_start_stop_timer_btn_click)
+
+        hbox_controls.pack_start(start_stop_btn, True, True) 
+
+        vbox.pack_start(activity_tbl, True, True)
+        vbox.pack_start(hbox_controls, True, False)
+
+        self.timer_win.add(vbox)
+        self.timer_win.set_title(win_title)
+        self.timer_win.connect('destroy', self.on_timer_window_destroy)
+        self.timer_win.show_all()
+
+
+    def set_timer_adjustment_value(self, value):
+        self.timer_adj.set_value(value) 
+        self.timer_adj.set_lower(value) 
+        self.timer_adj.set_upper(value) 
+
+
+    def on_start_stop_timer_btn_click(self, win):
+        if 'running' in self.timer:
+            self.timer.pop('running', None)
+
+
+    def on_start_stop_timer_time_changed(self, widget):
+        if not 'running' in self.timer:
+            self.timer['remaining'] = self.timer_adj.get_value() * 60
+
+
+    def on_timer_window_destroy(self, win):
+        # Clear data structures and widgets
+        # TODO: Stop timer? or maybe not...
+        print "NOP"
+
+
+
+
     ################################
     # Habit editing window functions
     ################################
 
 
     def habit_edit_window(self, habit):
-
         # Get categories
         categories = self.db.get_categories_list()
 

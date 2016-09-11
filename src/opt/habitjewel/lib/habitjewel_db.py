@@ -60,6 +60,7 @@ class HabitJewelDb:
                 weekly_quota,
                 priority,
                 m.desc,
+                to_minutes,
                 null_measure,
                 unit, plural,
                 target,
@@ -98,15 +99,16 @@ class HabitJewelDb:
                 'weekly_quota':         h[2], \
                 'priority':             h[3], \
                 'measure_desc':         h[4], \
-                'null_measure':         h[5], \
-                'unit':                 h[6], \
-                'plural':               h[7], \
-                'target':               h[8], \
-                'target_desc':          h[9], \
-                'pct_complete':         h[10], \
-                'created_date':         h[11], \
-                'paused_until_date':    h[12], \
-                'deleted_date':         h[13] \
+                'to_minutes':           h[5], \
+                'null_measure':         h[6], \
+                'unit':                 h[7], \
+                'plural':               h[8], \
+                'target':               h[9], \
+                'target_desc':          h[10], \
+                'pct_complete':         h[11], \
+                'created_date':         h[12], \
+                'paused_until_date':    h[13], \
+                'deleted_date':         h[14] \
             }
     
             start_date_dt = view_date_dt - datetime.timedelta(7)
@@ -117,7 +119,6 @@ class HabitJewelDb:
                     start_date_dt, end_date_dt) * 0.01
 
             habit['history'] = history
-            print str(history)
             habit['completion_total'] = completion_total
 
             # Add the habit to the list
@@ -477,119 +478,188 @@ class HabitJewelDb:
             return
     
         else:
+            # Apply all applicable schema upgrades
             if db_schema_ver == '0.5' or db_schema_ver == '0.4':
-        
                 cursor.close()
-                self.conn.close()
-                print "Backing up current database..."
-                copyfile(db_file, db_file + '_ver_' + db_schema_ver + '.backup')
+                self.upgrade_schema_0_4_to_0_6(db_file, db_schema_ver, code_schema_ver)
 
-                self.conn = sqlite3.connect(db_file)
-                print 'Upgrading database schema to version ' + code_schema_ver + '...'
-
-                # Remove points column from habits audit table
-                cursor = self.conn.executescript(
-                    """
-                    BEGIN TRANSACTION;
-                    CREATE TEMPORARY TABLE habits_a_tmp(
-                        update_date DATE,
-                        id INTEGER,
-                        activity TEXT,
-                        weekly_quota INTEGER,
-                        priority INTEGER,
-                        measure_id INTEGER,
-                        target INTEGER,
-                        goal_id INTEGER,
-                        created_date DATE,
-                        paused_until_date DATE,
-                        deleted_date DATE);
-                    INSERT INTO habits_a_tmp
-                        SELECT update_date,
-                               id,
-                               activity,
-                               weekly_quota,
-                               priority,
-                               measure_id,
-                               target,
-                               goal_id,
-                               created_date,
-                               paused_until_date,
-                               deleted_date
-                          FROM habits_a;
-                    DROP TABLE habits_a;
-                    CREATE TABLE habits_a (
-                        update_date DATE,
-                        id INTEGER,
-                        activity TEXT,
-                        weekly_quota INTEGER,
-                        priority INTEGER,
-                        measure_id INTEGER,
-                        target INTEGER,
-                        goal_id INTEGER,
-                        created_date DATE,
-                        paused_until_date DATE,
-                        deleted_date DATE);
-                    INSERT INTO habits_a
-                        SELECT *
-                          FROM habits_a_tmp;
-                    DROP TABLE habits_a_tmp;
-                    COMMIT;
-                    """)
-    
-                # Remove points column from habits table
-                cursor = self.conn.executescript(
-                    """
-                    BEGIN TRANSACTION;
-                    CREATE TEMPORARY TABLE habits_tmp(
-                        id INTEGER,
-                        activity TEXT,
-                        weekly_quota INTEGER,
-                        priority INTEGER,
-                        measure_id INTEGER,
-                        target INTEGER,
-                        goal_id INTEGER,
-                        created_date DATE,
-                        paused_until_date DATE,
-                        deleted_date DATE);
-                    INSERT INTO habits_tmp
-                        SELECT id,
-                               activity,
-                               weekly_quota,
-                               priority,
-                               measure_id,
-                               target,
-                               goal_id,
-                               created_date,
-                               paused_until_date,
-                               deleted_date
-                          FROM habits;
-                    DROP TABLE habits;
-                    CREATE TABLE habits (
-                        id INTEGER,
-                        activity TEXT,
-                        weekly_quota INTEGER,
-                        priority INTEGER,
-                        measure_id INTEGER,
-                        target INTEGER,
-                        goal_id INTEGER,
-                        created_date DATE,
-                        paused_until_date DATE,
-                        deleted_date DATE);
-                    INSERT INTO habits
-                        SELECT *
-                          FROM habits_tmp;
-                    DROP TABLE habits_tmp;
-                    COMMIT;
-                    """)
-    
-                self.add_schema_version_history(code_schema_ver)
-                return True
+            elif db_schema_ver == '0.6':
+                cursor.close()
+                self.upgrade_schema_0_6_to_0_7(db_file, db_schema_ver, code_schema_ver)
     
             else:
                 print 'No upgrade method available for Schema version ' + db_schema_ver
                 return False
-    
-    
+
+
+    def backup_database(self, db_file, db_schema_ver):
+        self.conn.close()
+        print "Backing up current database..."
+        copyfile(db_file, db_file + '_ver_' + db_schema_ver + '.backup')
+
+
+    def upgrade_schema_0_4_to_0_6(self, db_file, db_schema_ver, code_schema_ver):
+        self.backup_database(db_file, db_schema_ver)
+        
+        self.conn = sqlite3.connect(db_file)
+        print 'Upgrading database schema to version ' + code_schema_ver + '...'
+        
+        # Remove points column from habits audit table
+        cursor = self.conn.executescript(
+        """
+        BEGIN TRANSACTION;
+        CREATE TEMPORARY TABLE habits_a_tmp(
+        update_date DATE,
+        id INTEGER,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits_a_tmp
+        SELECT update_date,
+        id,
+        activity,
+        weekly_quota,
+        priority,
+        measure_id,
+        target,
+        goal_id,
+        created_date,
+        paused_until_date,
+        deleted_date
+        FROM habits_a;
+        DROP TABLE habits_a;
+        CREATE TABLE habits_a (
+        update_date DATE,
+        id INTEGER,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits_a
+        SELECT *
+        FROM habits_a_tmp;
+        DROP TABLE habits_a_tmp;
+        COMMIT;
+        """)
+        
+        # Remove points column from habits table
+        cursor = self.conn.executescript(
+        """
+        BEGIN TRANSACTION;
+        CREATE TEMPORARY TABLE habits_tmp(
+        id INTEGER,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits_tmp
+        SELECT id,
+        activity,
+        weekly_quota,
+        priority,
+        measure_id,
+        target,
+        goal_id,
+        created_date,
+        paused_until_date,
+        deleted_date
+        FROM habits;
+        DROP TABLE habits;
+        CREATE TABLE habits (
+        id INTEGER,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits
+        SELECT *
+        FROM habits_tmp;
+        DROP TABLE habits_tmp;
+        COMMIT;
+        """)
+
+        self.add_schema_version_history(code_schema_ver)
+        return True
+
+
+    def upgrade_schema_0_6_to_0_7(self, db_file, db_schema_ver, code_schema_ver):
+        self.backup_database(db_file, db_schema_ver)
+        
+        self.conn = sqlite3.connect(db_file)
+        print 'Upgrading database schema to version ' + code_schema_ver + '...'
+        
+        # Add to_minutes column to measures table
+        cursor = self.conn.executescript(
+        """
+        BEGIN TRANSACTION;
+        CREATE TEMPORARY TABLE measures_tmp(
+        id INTEGER PRIMARY KEY,
+        unit TEXT,
+        plural TEXT,
+        desc TEXT,
+        sort INTEGER,
+        to_minutes INTEGER,
+        null_measure INTEGER,
+        created_date DATE,
+        deleted_date DATE);
+        INSERT INTO measures_tmp
+        SELECT id,
+        unit,
+        plural,
+        desc,
+        sort,
+        CASE
+        WHEN desc = 'minute' THEN 1
+        WHEN desc = 'hour' THEN 60
+        ELSE NULL
+        END AS to_minutes,
+        null_measure,
+        created_date,
+        deleted_date
+        FROM measures;
+        DROP TABLE measures;
+        CREATE TABLE measures (
+        id INTEGER PRIMARY KEY,
+        unit TEXT,
+        plural TEXT,
+        desc TEXT,
+        sort INTEGER,
+        to_minutes INTEGER,
+        null_measure INTEGER,
+        created_date DATE,
+        deleted_date DATE);
+        INSERT INTO measures
+        SELECT *
+        FROM measures_tmp;
+        DROP TABLE measures_tmp;
+        COMMIT;
+        """)
+        
+        self.add_schema_version_history(code_schema_ver)
+        return True
+
+
     def create_new_database(self, code_schema_ver):
         cursor = self.conn.cursor()
     
@@ -664,8 +734,9 @@ class HabitJewelDb:
         # Measures - this is where the types of measures habits can have are defined
         cursor.execute(
             """
-            CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT, desc TEXT,
-                sort INTEGER, null_measure INTEGER, created_date DATE, deleted_date DATE)
+            CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT,
+                desc TEXT, sort INTEGER, to_seconds INTEGER, null_measure INTEGER,
+                created_date DATE, deleted_date DATE)
             """)
     
         # Define some sample categories
@@ -691,13 +762,13 @@ class HabitJewelDb:
         # Minutes
         cursor.execute(
             """
-            INSERT INTO measures (unit, plural, desc, sort, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
-            """, ['min', 'mins', 'minute', 1])
+            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
+            """, ['min', 'mins', 'minute', 1, 1])
         # Hours
         cursor.execute(
             """
-            INSERT INTO measures (unit, plural, desc, sort, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
-            """, ['hour', 'hours', 'hour', 1])
+            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
+            """, ['hour', 'hours', 'hour', 1, 60])
         # Kilometres
         cursor.execute(
             """
