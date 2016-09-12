@@ -21,7 +21,7 @@ if __name__ == "__main__":
     p.description="Record and track your progress in achieving your daily habits."
     p.author="Ashley Hooper"
     p.mail="ashleyghooper@gmail.com"
-    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader"
+    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader, python-gst0.10"
     # Edit this based on your import statements (for example, you probably will not need pygame)
     p.section="user/office"
     # When editing the .section, make sure to use [[Packaging#Sections|an allowed section]] - otherwise the autobuilder will give a warning.
@@ -46,10 +46,11 @@ chmod 755 /opt/habitjewel/habitjewel.py
     #    """ #Set here your pre install script
     #  p.preremove="""#!/bin/sh
     #  chmod +x /usr/bin/mclock.py""" #Set here your pre remove script
-    version = "0.6.1"          #Version of your software, for example "1.2.0" or "0.8.2"
+    version = "0.7.0"          #Version of your software, for example "1.2.0" or "0.8.2"
     build = "1"                #Build number, for example "1" for the first build of this version of your software. Increment for later re-builds of the same version of your software.
                                 #Text with changelog information to be displayed in the package "Details" tab of the Maemo Application Manager
-    changeloginformation = """* Refactored history gathering
+    changeloginformation = """* Implemented countdown timer, accessible for time-based habits on current date only
+* Refactored history gathering
 * Tweaked mini bar graph display
 * Disabled main menu Stats button (for now)
 """

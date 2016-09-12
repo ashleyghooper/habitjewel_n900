@@ -27,7 +27,7 @@ VERSION = '0.7.0' # (major.minor.sub-minor)
 CHANGELOG:
 
 v0.7.0
-* Start on countdown timer
+* Implemented countdown timer, accessible for time-based habits on current date only
 
 v0.6.1
 * Refactored history gathering
@@ -106,6 +106,10 @@ import sqlite3
 import sys
 import time
 
+# GStreamer for playing audio
+import pygst
+pygst.require('0.10')
+import gst
 
 # Get path to determine library and static resource locations
 running_path = sys.path[0]
@@ -128,6 +132,7 @@ LANDSCAPE, PORTRAIT = range(2)
 
 # Stackable Window titles
 WIN_TITLE_TOP                = APP_DISPLAY_NAME
+WIN_TITLE_TIMER              = 'Habit Jewel Timer'
 WIN_TITLE_GO_TO_DATE         = 'Go To Date'
 WIN_TITLE_PAUSE_UNTIL_DATE   = 'Pause Habit Until Date'
 WIN_TITLE_MASTER_HABITS_LIST = 'Master Habits List'
@@ -138,12 +143,16 @@ WIN_TITLE_ABOUT              = 'About HabitJewel'
 # Gtk CellRenderer wrapping widths
 # Day Habit List
 TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 650
-TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT = 360
+TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 360
 # Master Habit List
 TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 550
-TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE = 250
-TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT = 300
-TV_MASTER_QUOTA_WRAP_WIDTH_PORTRAIT = 170
+TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE    = 250
+TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 300
+TV_MASTER_QUOTA_WRAP_WIDTH_PORTRAIT     = 170
+
+# Timer activity display wrapping widths
+TIMER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 600
+TIMER_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 300
 
 # TreeView constants
 # Day habits list treeview column indexes and titles
@@ -197,7 +206,7 @@ MASTER_STATUS_ACTIVE_PIXBUF_FILE  = "habit_active.png"
 
 # Misc constants
 NULL_MEASURE_DESC = '(None)'
-
+TIMER_TIMEOUT_INTERVAL_SECS = 10
 
 # Set timezone
 time.tzset()
@@ -367,11 +376,13 @@ class MainWindow:
             self.mhl_win.add(self.mhl_container)
             self.mhl_win.show_all()
 
-        # Rotation for Add/Edit Habit window
-        elif active_window_title == _(WIN_TITLE_ADD_NEW_HABIT) or \
-             active_window_title == _(WIN_TITLE_EDIT_HABIT):
+        # Rotation for Timer window
+        elif active_window_title == _(WIN_TITLE_TIMER):
             # No need to re-layout at present
-            return
+            self.timer_win.remove(self.timer_container)
+            self.timer_container = self.get_timer_container()
+            self.timer_win.add(self.timer_container)
+            self.timer_win.show_all()
 
 
 
@@ -1128,7 +1139,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     else:
                         # If from preceding week, draw in grey
                         if completion[1] < 0:
-                            rgb = [0.3, 0.3, 0.3]
+                            rgb = [0.5, 0.5, 0.5]
                         # Otherwise, based on completion status
                         else:
                             red = (100 - completion[0]) * 0.01
@@ -1199,16 +1210,15 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         rend.set_property('wrap-width', self.tv_day_activity_wrap_width)
         column = gtk.TreeViewColumn(TV_DAY_COL_NAME_ACTIVITY, rend, markup=TV_DAY_COL_NUM_ACTIVITY)
         column.set_property('expand', True)
-        #column.tap_and_hold_setup(self.day_habits_list_menu)
         treeview.append_column(column)
 
         # column for history
         rend = gtk.CellRendererPixbuf()
-        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_HISTICON, rend, pixmap=TV_DAY_COL_NUM_HISTICON)
         column = gtk.TreeViewColumn(TV_DAY_COL_NAME_HISTICON, rend, pixbuf=TV_DAY_COL_NUM_HISTICON)
         treeview.append_column(column)
 
         # column for checkbox
+        # below was for single-clickable checkbox toggle
         #checkbox = CellRendererClickablePixbuf()
         #checkbox.connect('clicked', self.habit_toggled, treeview)
         checkbox = gtk.CellRendererPixbuf()
@@ -1229,6 +1239,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         #treeview.append_column(column)
 
 
+    # This function is no longer used
     def habit_toggled(self, widget, row_num, treeview):
         # Toggle habit completion status (fulfilled / unfulfilled / unknown)
         model = treeview.get_model()
@@ -1359,9 +1370,13 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         if not self.touched_habit:
             return
         else:
-            habit = self.touched_habit
+            self.timer_habit = self.touched_habit
             # Initialise the timer window
-            self.timer_window(habit)
+            self.timer_win = self.get_stackable_window(_(WIN_TITLE_TIMER))
+            self.timer_container = self.get_timer_container()
+            self.timer_win.add(self.timer_container)
+            self.timer_win.connect('destroy', self.on_timer_window_destroy)
+            self.timer_win.show_all()
 
 
     def on_status_cmenu_pct_selected (self, pct_complete):
@@ -1405,105 +1420,149 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
     ##################################
 
 
-    def timer_window(self, habit):
-        self.timer_win = hildon.StackableWindow()
-        vbox = gtk.VBox()
-
-        win_title = _('Habit Jewel Timer')
-
+    def get_timer_container(self):
+        habit = self.timer_habit
         activity_tbl = gtk.Table(2, 2, False)
         activity_tbl.set_row_spacings(5)
         activity_tbl.set_col_spacings(5)
 
-        a_lbl = gtk.Label(_('Timer for:'))
+        a_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        a_btn.set_label(_('Timer for:'))
+
         a_entry = gtk.Label(habit['activity'])
-        a_entry.set_justify(gtk.JUSTIFY_LEFT)
-        activity_tbl.attach(a_lbl, 0, 1, 0, 1)
+        a_entry.set_line_wrap(True)
+        activity_tbl.attach(a_btn, 0, 1, 0, 1)
         activity_tbl.attach(a_entry, 1, 2, 0, 1, gtk.EXPAND|gtk.FILL)
 
-        t_lbl = gtk.Label(_('Target:'))
-        t_entry = gtk.Label(habit['target_desc'])
-        t_entry.set_justify(gtk.JUSTIFY_LEFT)
-        activity_tbl.attach(t_lbl, 0, 1, 1, 2)
+        t_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        t_btn.set_label(_('Target:'))
+
+        if habit['pct_complete'] > 0:
+            status = str(100 - habit['pct_complete']) + '% ' + _('remaining')
+        else:
+            status = _('not started')
+        t_text = habit['target_desc'] + ' (' + status + ')'
+        t_entry = gtk.Label(t_text)
+        t_entry.set_line_wrap(True)
+        activity_tbl.attach(t_btn, 0, 1, 1, 2)
         activity_tbl.attach(t_entry, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL)
 
-        hbox_controls = gtk.HBox(True)
+        if self.last_orientation == LANDSCAPE:
+            box_controls = gtk.HBox(True)
+        else:
+            box_controls = gtk.VBox(True)
+
+        box_controls.set_spacing(30)
 
         # When timer is running, display
-        if 'running' in self.timer:
-            start_stop_lbl = _('Stop Timer')
-        else:
-            start_stop_lbl = _('Start Timer')
-
+        if not 'running' in self.timer and not 'remain_secs' in self.timer:
             # Set slider initial value (current remaining time in mins if existing timer)
-            if 'remaining' in self.timer:
-                remain_mins = remaining / 60
-            else:
-                # Calculate remaining time based on percent already complete and target
-                remain_mins = (100 - habit['pct_complete']) * \
-                        (habit['target'] * habit['to_minutes']) * 0.01
+            # Calculate remaining time based on percent already complete and target
+            remain_mins = (100 - habit['pct_complete']) * \
+                    (habit['target'] * habit['to_minutes']) * 0.01
+            self.timer['remain_secs'] = remain_mins * 60
 
-            self.timer_adj = gtk.Adjustment(remain_mins, 1, habit['target'] * habit['to_minutes'] * 2, 0, 1)
-            scale = gtk.HScale(self.timer_adj)
-            scale.set_digits(0)
-            scale.connect('value_changed', self.on_start_stop_timer_time_changed)
+        else:
+            remain_mins = self.timer['remain_secs'] * 0.01666666
 
-            vbox_scale = gtk.VBox(True)
-            scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
-            vbox_scale.pack_start(scale_lbl, True, False) 
-            vbox_scale.pack_start(scale, True, False) 
 
-            hbox_controls.pack_start(vbox_scale, True, False) 
-        
+        self.timer_adj = gtk.Adjustment(remain_mins, 0, habit['target'] * habit['to_minutes'] * 2, 0, 1)
+        scale = gtk.HScale(self.timer_adj)
+        # Disable decimals
+        scale.set_digits(0)
+        scale.connect('value_changed', self.on_timer_time_changed)
 
-        start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+        vbox_scale = gtk.VBox(True)
+        scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
+        vbox_scale.pack_start(scale_lbl, True, False) 
+        vbox_scale.pack_start(scale, True, False) 
+
+        box_controls.pack_start(vbox_scale, True, False) 
+
+        self.start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
-        start_stop_btn.set_label(start_stop_lbl)
-        start_stop_btn.connect('clicked', self.on_start_stop_timer_btn_click)
+        start_stop_btn_lbl = self.get_timer_start_stop_btn_lbl()
+        self.start_stop_btn.set_label(start_stop_btn_lbl)
+        self.start_stop_btn.connect('clicked', self.on_timer_start_stop_btn_click)
 
-        hbox_controls.pack_start(start_stop_btn, True, True) 
+        box_controls.pack_start(self.start_stop_btn, True, True) 
 
+        vbox = gtk.VBox()
         vbox.pack_start(activity_tbl, True, True)
-        vbox.pack_start(hbox_controls, True, False)
+        vbox.pack_start(box_controls, True, False)
 
-        self.timer_win.add(vbox)
-        self.timer_win.set_title(win_title)
-        self.timer_win.connect('destroy', self.on_timer_window_destroy)
-        self.timer_win.show_all()
+        return vbox
 
 
     def set_timer_adjustment_value(self, value):
         self.timer_adj.set_value(value) 
-        self.timer_adj.set_lower(value) 
-        self.timer_adj.set_upper(value) 
 
 
-    def on_start_stop_timer_btn_click(self, win):
+    def get_timer_start_stop_btn_lbl(self):
+        if 'running' in self.timer:
+            return _('Stop Timer')
+        else:
+            return _('Start Timer')
+
+
+    def set_timer_countdown_time(self, seconds):
+        self.timer['remain_secs'] = seconds
+
+
+    def on_timer_start_stop_btn_click(self, win):
+        self.on_timer_start_or_stop()
+
+
+    def on_timer_start_or_stop(self):
         if 'running' in self.timer:
             self.timer.pop('running', None)
+            self.timer.pop('remain_secs', None)
         else:
             self.timer['running'] = True
-            gobject.timeout_add(1000, self.timer_countdown)
-            self.timer_countdown()
+            gobject.timeout_add_seconds(TIMER_TIMEOUT_INTERVAL_SECS, self.timer_countdown)
+
+        btn_lbl = self.get_timer_start_stop_btn_lbl()
+        self.start_stop_btn.set_label(btn_lbl)
 
 
-    def on_start_stop_timer_time_changed(self, widget):
+    def on_timer_time_changed(self, widget):
         if not 'running' in self.timer:
-            self.timer['remaining'] = self.timer_adj.get_value() * 60
+            self.set_timer_countdown_time(self.timer_adj.get_value() * 60)
         else:
-            self.timer_adj.set_value(self.timer['remaining'] * 0.016666666)
+            self.timer_adj.set_value(self.timer['remain_secs'] * 0.01666666)
 
 
     def timer_countdown(self):
-        if self.timer['remaining'] > 0:
-            print "NOP"
-            #self.timer_label.set_text
+        if not 'running' in self.timer:
+            return False
+
+        # Timer is running but still has time to go
+        elif self.timer['remain_secs'] > TIMER_TIMEOUT_INTERVAL_SECS:
+            self.timer['remain_secs'] -= TIMER_TIMEOUT_INTERVAL_SECS
+            new_min = abs(self.timer['remain_secs'] % 60) 
+            if new_min == 0 or new_min >= 60 - TIMER_TIMEOUT_INTERVAL_SECS:
+                self.set_timer_adjustment_value(self.timer['remain_secs'] * 0.01666666)
+            return True
+
+        # Timer is running and time's up!
+        else:
+            self.set_timer_adjustment_value(0)
+            self.on_timer_start_or_stop()
+            pl = gst.element_factory_make("playbin", "player")
+            pl.set_property('uri','file:///usr/share/sounds/ui-wake_up_tune.wav')
+            pl.set_state(gst.STATE_PLAYING)
+            return False
 
 
     def on_timer_window_destroy(self, win):
         # Clear data structures and widgets
         # TODO: Stop timer? or maybe not...
-        print "NOP"
+        if 'running' in self.timer:
+            self.on_timer_start_or_stop()
+            self.show_info_banner(self.top_win, _('Timer Cleared'))
+            self.timer = None
 
 
 
