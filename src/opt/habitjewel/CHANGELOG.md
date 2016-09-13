@@ -2,12 +2,14 @@
 ### Added
 
 ### Changed
-- Nicer formatting and colouring of habits in day habits list
-- Added icon to timer start/stop button
 
 ## [0.7.1] - 2016-09-13
+### Added
+- Icon on timer start/stop button
+
 ### Changed
-- Display tweaks
+- Nicer formatting and colouring of habits in day habits list
+- Other display tweaks
 - Moved change log from main script to CHANGELOG.md (this file)
 
 ## [0.7.0] - 2016-09-12

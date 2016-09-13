@@ -723,9 +723,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
     def completion_pct_to_status_hex_color(self, completion):
         [red, green, blue] = self.completion_pct_to_status_rgb_color(completion)
-        print 'red = ' + str(red) + ' ' + str(self.fraction_to_hex(red))
-        print 'green = ' + str(green)
-        print 'blue = ' + str(blue)
         red   = self.fraction_to_hex(red)
         green = self.fraction_to_hex(green)
         blue  = self.fraction_to_hex(blue)
@@ -1085,8 +1082,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
     def populate_day_habits_list_ls(self, day_habits_list):
         day_num_of_week = self.dt_to_day_number(self.view_date_dt)
-        print '///////////////////////////////////////////////////////////'
-        print self.dt_to_display_date(self.view_date_dt)
 
         for item in day_habits_list:
             lstore_iter = self.day_habits_list_model.append()
@@ -1103,13 +1098,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     progress = ((float(item['completion_total']) / float(day_num_of_week)) / float(item['weekly_quota'])) * day_num_of_week * 100
                 else:
                     progress = 0
-                print item['activity'] + ': ' + 'progress = ' + str(progress)
+
                 highlight_colour = self.completion_pct_to_status_hex_color(progress)
-                print "colour = " + str(highlight_colour)
                 activity_markup += ' <span foreground="' + str(highlight_colour) + '"> <small>' + str(item['completion_total']) + '/' + \
                         str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
-                #activity_markup += ' <span> <small>' + str(item['completion_total']) + '/' + \
-                #        str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
 
             # Render the last 7 days history graph for the habit
             pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
@@ -1481,6 +1473,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
         self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
         self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
+        self.timer_start_stop_btn.set_size_request(width=300, height=150)
         self.timer_start_stop_btn.connect('clicked', self.on_timer_start_stop_btn_click)
 
         box_controls.pack_start(self.timer_start_stop_btn, True, True)
@@ -1535,7 +1528,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.timer_start_stop_btn.remove(self.timer_start_stop_btn_hbox)
         self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
         self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
-        self.timer_win.queue_draw()
+        self.timer_win.show_all()
 
 
     def on_timer_time_changed(self, widget):
@@ -1569,7 +1562,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
     def on_timer_window_destroy(self, win):
         # Clear data structures and widgets
-        # TODO: Stop timer? or maybe not...
         if 'running' in self.timer:
             self.on_timer_start_or_stop()
             self.show_info_banner(self.top_win, _('Timer Cleared'))

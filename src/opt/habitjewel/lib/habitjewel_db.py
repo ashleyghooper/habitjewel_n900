@@ -728,7 +728,7 @@ class HabitJewelDb:
         cursor.execute(
             """
             CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT,
-                desc TEXT, sort INTEGER, to_seconds INTEGER, null_measure INTEGER,
+                desc TEXT, sort INTEGER, to_minutes INTEGER, null_measure INTEGER,
                 created_date DATE, deleted_date DATE)
             """)
     
@@ -755,12 +755,12 @@ class HabitJewelDb:
         # Minutes
         cursor.execute(
             """
-            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
+            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, ?, CURRENT_DATE)
             """, ['min', 'mins', 'minute', 1, 1])
         # Hours
         cursor.execute(
             """
-            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, CURRENT_DATE)
+            INSERT INTO measures (unit, plural, desc, sort, to_minutes, created_date) VALUES (?, ?, ?, ?, ?, CURRENT_DATE)
             """, ['hour', 'hours', 'hour', 1, 60])
         # Kilometres
         cursor.execute(
