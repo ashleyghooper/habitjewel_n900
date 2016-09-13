@@ -19,81 +19,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.7.0' # (major.minor.sub-minor)
+VERSION = '0.7.1' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
+# See CHANGELOG.md for detailed change history
 
-"""
-CHANGELOG:
-
-v0.7.0
-* Implemented countdown timer, accessible for time-based habits on current date only
-
-v0.6.1
-* Refactored history gathering
-* Tweaked mini bar graph display
-* Disabled main menu Stats button (for now)
-
-v0.6.0
-* Added mini bar-graphs next to each habit which display completion status for previous days
-* Created HabitJewelDB class and moved all database functions there
-* Added schema version check and upgrade script for schema vers 0.4 and 0.5
-
-v0.5.0
-* Added New Habit button and 'clone habit' tap and hold option in MHL
-* Added habit parameters preview on habit editing screen
-
-v0.4.0
-* Added priority to the Edit Habits screen
-* Added null measure for habits which don't have any associated measure
-* Added a schema version history table, version will be inserted on database creation,
-  and future versions with incompatible schema changes can use this to determine the
-  version so as to know how to migrate to their newer schemas
-* Renamed habitjewel_utils.py to habitjewel_db.py
-* Moved database creation code to habitjewel_db.py and took out most of my sample habits
-* Changed frequency field/column to weekly quota/quota (easier to make sense of)
-* Fixed module path include code
-* Added timezone
-* Fixed portrait on startup using Khertan's patch to thp's FremantleRotation
-* Deleted cruft
-
-v0.3.0
-* Bumped version number due to incompatible schema changes
-
-v0.2.12
-* Fixed incorrect dependency on portrait for FremantleRotation
-* Changed habit schedules to based on weekly quota (repetitions) per weekly cycle
-
-v0.2.10
-* Changed back from Gtk UIManager to normal Gtk Menus for Hildon-styled popups
-
-v0.2.9
-* Fixed redraw of master habits list on orientation change
-* Redraw edit habit window when paused/unpaused or deleted/undeleted
-* Removed window stack, tried various ways to only handle rotation for visible window,
-  but failed so reverted to blanket rotation.
-* Created window stack to track top window to better handle rotation for windows
-* Make copy of habit object as editing_habit (and clean up on editing window destroy)
-* Added some date utility functions
-* Refactoring
-* Add DELETE & PAUSE to tap and hold menu for habits
-* Make master habit list, accessible from main menu to edit all habits (not just current day)
-
-TODO:
-* Test for orientation change issues (see FIXME)
-* Don't prepopulate habit table when no database - make placeholder for when empty instead
-* Restore single click on checkbox to toggle done/missed/unknown statuses
-* Move "About" page markup to external file
-* Track periods where habits were "paused" in order to calculate stats correctly
-* Add graphs
-* Visual indicator when browsing future or past days' habits
-* Move constants to a module
-* Move code at bare module scope into class(es)
-"""
-
-import datetime
 import cairo
 import calendar
+import datetime
 import fcntl
 import gettext
 import gobject
@@ -143,7 +76,7 @@ WIN_TITLE_ABOUT              = 'About HabitJewel'
 # Gtk CellRenderer wrapping widths
 # Day Habit List
 TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 650
-TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 360
+TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 340
 # Master Habit List
 TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 550
 TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE    = 250
@@ -200,9 +133,14 @@ HABIT_RECENT_HIST_PIXBUF_SIZE = 48
 HABIT_RECENT_HIST_BAR_HEIGHT  = 32
 
 # Master Habits List status icons
-MASTER_STATUS_DELETED_PIXBUF_FILE = "habit_deleted.png"
-MASTER_STATUS_PAUSED_PIXBUF_FILE  = "habit_paused.png"
-MASTER_STATUS_ACTIVE_PIXBUF_FILE  = "habit_active.png"
+MASTER_STATUS_DELETED_PIXBUF_FILE = "generic_red_x_icon.png"
+MASTER_STATUS_PAUSED_PIXBUF_FILE  = "generic_pause_icon.png"
+MASTER_STATUS_ACTIVE_PIXBUF_FILE  = "generic_play_icon.png"
+
+# Timer icons
+TIMER_STOP_PIXBUF_FILE  = "generic_pause_icon.png"
+TIMER_START_PIXBUF_FILE = "generic_play_icon.png"
+
 
 # Misc constants
 NULL_MEASURE_DESC = '(None)'
@@ -431,6 +369,13 @@ class MainWindow:
 
     def dt_to_db_date(self, dt):
         return dt.strftime('%Y-%m-%d')
+
+
+    def dt_to_day_number(self, dt):
+        day_num = int(dt.strftime('%w'))
+        if day_num == 0:
+            day_num = 7
+        return day_num
 
 
     def get_today_dt(self):
@@ -750,6 +695,46 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
 
+    ##################################
+    # General Habits-related functions
+    ##################################
+
+
+    def completion_pct_to_status_rgb_color(self, completion):
+        if completion > 0:
+            if completion > 100:
+                completion = 100
+            red = (100 - completion) * 0.01
+            green = (completion * 0.004) + 0.6
+            blue = 0.0
+        else:
+            red = 0.6
+            green = 0.6
+            blue = 0.6
+        return [red, green, blue]
+
+
+    def fraction_to_hex(self, fraction):
+        if fraction > 0:
+            return int(fraction * 256) - 1
+        else:
+            return 0
+
+
+    def completion_pct_to_status_hex_color(self, completion):
+        [red, green, blue] = self.completion_pct_to_status_rgb_color(completion)
+        print 'red = ' + str(red) + ' ' + str(self.fraction_to_hex(red))
+        print 'green = ' + str(green)
+        print 'blue = ' + str(blue)
+        red   = self.fraction_to_hex(red)
+        green = self.fraction_to_hex(green)
+        blue  = self.fraction_to_hex(blue)
+        return '#%02x%02x%02x' % (red, green, blue)
+
+
+
+
+
     ##############################
     # Master Habits List functions
     ##############################
@@ -855,10 +840,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             else:
                 status = 'active'
 
-            activity_markup = '<b>' + item['activity'] + '</b> '
+            activity_markup = item['activity']
 
             if item['null_measure'] != 1:
-                activity_markup += str(item['target_desc']);
+                activity_markup += ' <small>' + str(item['target_desc']) + '</small>';
 
             icon_pixbuf = self.get_pixbuf_filename_for_master_status(status)
 
@@ -1099,18 +1084,32 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def populate_day_habits_list_ls(self, day_habits_list):
+        day_num_of_week = self.dt_to_day_number(self.view_date_dt)
+        print '///////////////////////////////////////////////////////////'
+        print self.dt_to_display_date(self.view_date_dt)
+
         for item in day_habits_list:
             lstore_iter = self.day_habits_list_model.append()
             checkbox_pixbuf = self.get_pixbuf_filename_for_completion_status(item['pct_complete'])
  
-            activity_markup = '<b>' + item['activity'] + '</b> '
+            activity_markup = item['activity']
 
             if item['null_measure'] != 1:
-                activity_markup += str(item['target_desc']);
+                activity_markup += ' <i><small>' + str(item['target_desc']) + '</small></i>';
 
             if item['weekly_quota'] > 1:
-                activity_markup += ' [ ' + str(item['completion_total']) + '/' + \
-                        str(item['weekly_quota']) + ' ]'
+                if item['completion_total'] > 0:
+                    # Calculate a percentage completion for the week up to the current view date
+                    progress = ((float(item['completion_total']) / float(day_num_of_week)) / float(item['weekly_quota'])) * day_num_of_week * 100
+                else:
+                    progress = 0
+                print item['activity'] + ': ' + 'progress = ' + str(progress)
+                highlight_colour = self.completion_pct_to_status_hex_color(progress)
+                print "colour = " + str(highlight_colour)
+                activity_markup += ' <span foreground="' + str(highlight_colour) + '"> <small>' + str(item['completion_total']) + '/' + \
+                        str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
+                #activity_markup += ' <span> <small>' + str(item['completion_total']) + '/' + \
+                #        str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
 
             # Render the last 7 days history graph for the habit
             pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
@@ -1125,12 +1124,12 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             # Graph previous 7 days' history for habit, [0:7] returns all but view date
             #for day in sorted(item['history'][:-1]):
             for index, day in enumerate(sorted(item['history'])[0:7]):
-                completion = item['history'][day]
+                day_completion = item['history'][day]
                 # If we have history for this day...
-                if len(completion) > 0:
+                if len(day_completion) > 0:
 
                     # If missed show red bar, height of 1
-                    if completion[0] == 0:
+                    if day_completion[0] == 0:
                         rgb = [0.9, 0.0, 0.0]
                         bar_y = HABIT_RECENT_HIST_BAR_HEIGHT
                         bar_h = 4
@@ -1138,21 +1137,18 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     # For all other results
                     else:
                         # If from preceding week, draw in grey
-                        if completion[1] < 0:
+                        if day_completion[1] < 0:
                             rgb = [0.5, 0.5, 0.5]
                         # Otherwise, based on completion status
                         else:
-                            red = (100 - completion[0]) * 0.01
-                            green = (completion[0] * 0.004) + 0.6
-                            blue = 0.0
-                            rgb = [red, green, blue]
+                            rgb = self.completion_pct_to_status_rgb_color(day_completion[0])
 
-                        bar_y = (100 - completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
-                        bar_h = completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_y = (100 - day_completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_h = day_completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
 
                 # Draw a placeholder since we have no history for this day
                 else:
-                    rgb = [0.3, 0.3, 0.3]
+                    rgb = self.completion_pct_to_status_rgb_color(-1)
                     bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
                     bar_h = 1
 
@@ -1450,7 +1446,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         activity_tbl.attach(t_entry, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL)
 
         if self.last_orientation == LANDSCAPE:
-            box_controls = gtk.HBox(True)
+            box_controls = gtk.HBox(False)
         else:
             box_controls = gtk.VBox(True)
 
@@ -1470,24 +1466,24 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         self.timer_adj = gtk.Adjustment(remain_mins, 0, habit['target'] * habit['to_minutes'] * 2, 0, 1)
         scale = gtk.HScale(self.timer_adj)
-        # Disable decimals
+        # Disable decimal places in horizontal scale
         scale.set_digits(0)
         scale.connect('value_changed', self.on_timer_time_changed)
 
         vbox_scale = gtk.VBox(True)
         scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
-        vbox_scale.pack_start(scale_lbl, True, False) 
-        vbox_scale.pack_start(scale, True, False) 
+        vbox_scale.pack_start(scale_lbl, True, True) 
+        vbox_scale.pack_start(scale, True, True)
 
-        box_controls.pack_start(vbox_scale, True, False) 
+        box_controls.pack_start(vbox_scale, True, True) 
 
-        self.start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+        self.timer_start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
-        start_stop_btn_lbl = self.get_timer_start_stop_btn_lbl()
-        self.start_stop_btn.set_label(start_stop_btn_lbl)
-        self.start_stop_btn.connect('clicked', self.on_timer_start_stop_btn_click)
+        self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
+        self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
+        self.timer_start_stop_btn.connect('clicked', self.on_timer_start_stop_btn_click)
 
-        box_controls.pack_start(self.start_stop_btn, True, True) 
+        box_controls.pack_start(self.timer_start_stop_btn, True, True)
 
         vbox = gtk.VBox()
         vbox.pack_start(activity_tbl, True, True)
@@ -1500,11 +1496,21 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         self.timer_adj.set_value(value) 
 
 
-    def get_timer_start_stop_btn_lbl(self):
+    def get_timer_start_stop_btn_hbox(self):
+        # HBox for start/stop timer button
+        hbox = gtk.HBox()
         if 'running' in self.timer:
-            return _('Stop Timer')
+            icon_filename = TIMER_STOP_PIXBUF_FILE
+            label_text = _('Stop Timer')
         else:
-            return _('Start Timer')
+            icon_filename = TIMER_START_PIXBUF_FILE
+            label_text = _('Start Timer')
+        pixbuf = gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
+        img = gtk.image_new_from_pixbuf(pixbuf)
+        label = gtk.Label(label_text)
+        hbox.pack_start(img)
+        hbox.pack_start(label)
+        return hbox
 
 
     def set_timer_countdown_time(self, seconds):
@@ -1519,12 +1525,17 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         if 'running' in self.timer:
             self.timer.pop('running', None)
             self.timer.pop('remain_secs', None)
+            self.show_info_banner(self.top_win, _('Timer Stopped'))
         else:
             self.timer['running'] = True
             gobject.timeout_add_seconds(TIMER_TIMEOUT_INTERVAL_SECS, self.timer_countdown)
+            self.show_info_banner(self.top_win, _('Timer Started'))
 
-        btn_lbl = self.get_timer_start_stop_btn_lbl()
-        self.start_stop_btn.set_label(btn_lbl)
+        # Why doesn't this work? Start/Stop button doesn't redraw when clicked
+        self.timer_start_stop_btn.remove(self.timer_start_stop_btn_hbox)
+        self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
+        self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
+        self.timer_win.queue_draw()
 
 
     def on_timer_time_changed(self, widget):

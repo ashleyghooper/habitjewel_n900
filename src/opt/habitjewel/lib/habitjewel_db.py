@@ -144,13 +144,6 @@ class HabitJewelDb:
             percent     = hist_row[1]
             week_offset = hist_row[2]
             hist_rows[date] = [percent, week_offset]
-            """
-            # If history record is for the current day, set it
-            if pc_date == view_date_dt.strftime('%Y-%m-%d'):
-                day_percent_complete = pc_percent
-                if history[db_date][1] == 0:
-                    wk_complete_overall += history[db_date][0] * 0.01
-            """
 
         completion_by_day = {}
         for day_dt in self.date_range(start_date_dt, end_date_dt):
