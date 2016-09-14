@@ -3,6 +3,10 @@
 
 ### Changed
 
+## [0.7.2] - 2016-09-15
+### Changed
+- Fixed crash when exiting timer that is running
+
 ## [0.7.1] - 2016-09-13
 ### Added
 - Icon on timer start/stop button

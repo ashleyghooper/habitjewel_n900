@@ -19,7 +19,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.7.1' # (major.minor.sub-minor)
+VERSION = '0.7.2' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 # See CHANGELOG.md for detailed change history
@@ -1563,9 +1563,8 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
     def on_timer_window_destroy(self, win):
         # Clear data structures and widgets
         if 'running' in self.timer:
-            self.on_timer_start_or_stop()
             self.show_info_banner(self.top_win, _('Timer Cleared'))
-            self.timer = None
+            self.timer = {}
 
 
 
