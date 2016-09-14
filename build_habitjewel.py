@@ -21,7 +21,7 @@ if __name__ == "__main__":
     p.description="Record and track your progress in achieving your daily habits."
     p.author="Ashley Hooper"
     p.mail="ashleyghooper@gmail.com"
-    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader"
+    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader, python-gst0.10"
     # Edit this based on your import statements (for example, you probably will not need pygame)
     p.section="user/office"
     # When editing the .section, make sure to use [[Packaging#Sections|an allowed section]] - otherwise the autobuilder will give a warning.
@@ -46,10 +46,13 @@ chmod 755 /opt/habitjewel/habitjewel.py
     #    """ #Set here your pre install script
     #  p.preremove="""#!/bin/sh
     #  chmod +x /usr/bin/mclock.py""" #Set here your pre remove script
-    version = "0.1.3"           #Version of your software, for example "1.2.0" or "0.8.2"
+    version = "0.7.2"          #Version of your software, for example "1.2.0" or "0.8.2"
     build = "1"                #Build number, for example "1" for the first build of this version of your software. Increment for later re-builds of the same version of your software.
                                 #Text with changelog information to be displayed in the package "Details" tab of the Maemo Application Manager
-    changeloginformation = "Fixed bug with pixmaps dir when in /opt"
+    changeloginformation = """## [0.7.2] - 2016-09-15
+### Changed
+- Fixed crash when exiting timer that is running
+"""
     dir_name = "src"            #Name of the subfolder containing your package source files (for example, usr\share\icons\hicolor\scalable\myappicon.svg, usr\lib\myapp\somelib.py). We suggest to leave it named src in all projects and will refer to that in the wiki article on maemo.org
     #Thanks to DareTheHair from talk.maemo.org for this snippet that recursively builds the file list.
     for root, dirs, files in os.walk(dir_name):

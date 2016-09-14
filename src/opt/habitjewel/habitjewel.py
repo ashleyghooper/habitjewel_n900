@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: UTF8 -*-
-# Copyright (C) 2016 by Ashley Hooper
+#
+# Habit Jewel: Track your habits
+# Copyright (c) 2016 Ashley Hooper
 # <ashleyghooper@gmail.com>
+#
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -15,56 +18,44 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
-#
-# HabitJewel: Track your habits
 
-VERSION = '0.2.9'
+VERSION = '0.7.2' # (major.minor.sub-minor)
 
-"""
-CHANGELOG:
-* Redraw edit habit window when paused/unpaused or deleted/undeleted
-* Removed window stack, tried various ways to only handle rotation for visible window,
-  but failed so reverted to blanket rotation.
-* Created window stack to track top window to better handle rotation for windows
-* Make copy of habit object as editing_habit (and clean up on editing window destroy)
-* Added some date utility functions
-* Refactoring
-* Add DELETE & PAUSE to tap and hold menu for habits
-* Make master habit list, accessible from main menu to edit all habits (not just current day)
+# Minor version changes each time database schema changes 
+# See CHANGELOG.md for detailed change history
 
-TODO:
-* Evaluate changing back from Gtk UIManager to normal Gtk Menus for Hildon-styled popups
-* Test for orientation change issues (see FIXME)
-* Fix redraw of master habits list on orientation change
-* Don't prepopulate habit table when no database - make placeholder for when empty instead
-* Restore single click on checkbox to toggle done/missed/unknown statuses
-* Move "About" page markup to external file
-* Track periods where habits were "paused" in order to calculate stats correctly
-* Add graphs
-* Visual indicator when browsing future or past days' habits
-* Move constants to a module
-* Move code at bare module scope into class(es)
-"""
-
-import datetime
+import cairo
 import calendar
+import datetime
+import fcntl
 import gettext
 import gobject
 import gtk
 import hildon
-import pango
 import os
 import osso
+import pango
 import sqlite3
 import sys
 import time
 
-from portrait import FremantleRotation
+# GStreamer for playing audio
+import pygst
+pygst.require('0.10')
+import gst
 
-import habitjewel_utils
+# Get path to determine library and static resource locations
+running_path = sys.path[0]
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "lib"))
+img_dir = running_path + '/pixmaps/'
+
+# Now import utilities (database) module
+import habitjewel_db
 
 
 # Constants
+APP_DISPLAY_NAME = 'Habit Jewel'
+APP_SYSTEM_NAME = 'habitjewel'
 WIN_PROG_IND = hildon.hildon_gtk_window_set_progress_indicator
 OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 
@@ -73,7 +64,8 @@ OSSO_CONTEXT = osso.Context('org.maemo.habitjewel', VERSION, False)
 LANDSCAPE, PORTRAIT = range(2)
 
 # Stackable Window titles
-WIN_TITLE_TOP                = 'Habit Jewel'
+WIN_TITLE_TOP                = APP_DISPLAY_NAME
+WIN_TITLE_TIMER              = 'Habit Jewel Timer'
 WIN_TITLE_GO_TO_DATE         = 'Go To Date'
 WIN_TITLE_PAUSE_UNTIL_DATE   = 'Pause Habit Until Date'
 WIN_TITLE_MASTER_HABITS_LIST = 'Master Habits List'
@@ -82,17 +74,18 @@ WIN_TITLE_EDIT_HABIT         = 'Edit Habit'
 WIN_TITLE_ABOUT              = 'About HabitJewel'
 
 # Gtk CellRenderer wrapping widths
-# Master Habit List
-TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 500
-TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT = 300
-TV_MASTER_REPEATS_WRAP_WIDTH_LANDSCAPE = 300
-TV_MASTER_REPEATS_WRAP_WIDTH_PORTRAIT = 170
 # Day Habit List
-TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 700
-TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT = 380
+TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 650
+TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 340
+# Master Habit List
+TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 550
+TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE    = 250
+TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 300
+TV_MASTER_QUOTA_WRAP_WIDTH_PORTRAIT     = 170
 
-# Unused?
-#CLICK_DRAG_THRESHOLD = 1024
+# Timer activity display wrapping widths
+TIMER_ACTIVITY_WRAP_WIDTH_LANDSCAPE = 600
+TIMER_ACTIVITY_WRAP_WIDTH_PORTRAIT  = 300
 
 # TreeView constants
 # Day habits list treeview column indexes and titles
@@ -100,25 +93,25 @@ TV_DAY_COL_NUM_ID             = 0
 TV_DAY_COL_NAME_ID            = 'ID'
 TV_DAY_COL_NUM_ACTIVITY       = 1
 TV_DAY_COL_NAME_ACTIVITY      = 'Activity'
-TV_DAY_COL_NUM_PIXBUF         = 2
-TV_DAY_COL_NAME_PIXBUF        = 'Status'
-TV_DAY_COL_NUM_PCT_COMPLETE   = 3
+TV_DAY_COL_NUM_HISTICON       = 2
+TV_DAY_COL_NAME_HISTICON      = 'History'
+TV_DAY_COL_NUM_CHECKBOX       = 3
+TV_DAY_COL_NAME_CHECKBOX      = 'Checkbox'
+TV_DAY_COL_NUM_PCT_COMPLETE   = 4
 TV_DAY_COL_NAME_PCT_COMPLETE  = 'Percent complete'
-TV_DAY_COL_NUM_INTVL_CODE     = 4
-TV_DAY_COL_NAME_INTVL_CODE    = 'Interval type'
 
 # Day habits list treeview column indexes and titles
 TV_MASTER_COL_NUM_ID             = 0
 TV_MASTER_COL_NAME_ID            = 'ID'
-TV_MASTER_COL_NUM_ACTIVITY       = 1
+TV_MASTER_COL_NUM_ICON           = 1
+TV_MASTER_COL_NAME_ICON          = 'Icon'
+TV_MASTER_COL_NUM_ACTIVITY       = 2
 TV_MASTER_COL_NAME_ACTIVITY      = 'Activity'
-TV_MASTER_COL_NUM_REPEATS        = 2
-TV_MASTER_COL_NAME_REPEATS       = 'Repeats'
-TV_MASTER_COL_NUM_INTVL_CODE     = 3 
-TV_MASTER_COL_NAME_INTVL_CODE    = 'Interval type'
-TV_MASTER_COL_NUM_INTVL          = 4 
-TV_MASTER_COL_NAME_INTVL         = 'Interval'
-TV_MASTER_COL_NUM_STATUS         = 5 
+TV_MASTER_COL_NUM_QUOTA_DISP     = 3
+TV_MASTER_COL_NAME_QUOTA_DISP    = 'Quota'
+TV_MASTER_COL_NUM_QUOTA          = 4
+TV_MASTER_COL_NAME_QUOTA         = 'Quota'
+TV_MASTER_COL_NUM_STATUS         = 5
 TV_MASTER_COL_NAME_STATUS        = 'Status'
 
 # Habit status thresholds and pixbufs
@@ -135,182 +128,56 @@ HISTORY_MISSED_PIXBUF_FILE  = "checkbox_crossed.png"
 HISTORY_CLEAR_PCT           = -1
 HISTORY_CLEAR_PIXBUF_FILE   = "checkbox_unchecked.png"
 
+# Habit recent history graph size
+HABIT_RECENT_HIST_PIXBUF_SIZE = 48
+HABIT_RECENT_HIST_BAR_HEIGHT  = 32
 
-# Initialisation
+# Master Habits List status icons
+MASTER_STATUS_DELETED_PIXBUF_FILE = "generic_red_x_icon.png"
+MASTER_STATUS_PAUSED_PIXBUF_FILE  = "generic_pause_icon.png"
+MASTER_STATUS_ACTIVE_PIXBUF_FILE  = "generic_play_icon.png"
+
+# Timer icons
+TIMER_STOP_PIXBUF_FILE  = "generic_pause_icon.png"
+TIMER_START_PIXBUF_FILE = "generic_play_icon.png"
+
+
+# Misc constants
+NULL_MEASURE_DESC = '(None)'
+TIMER_TIMEOUT_INTERVAL_SECS = 10
+
+# Set timezone
+time.tzset()
+
+# User data initialisation
 home = os.path.expanduser('~')
-config_dir = home + '/.habitjewel/'
-db_file = config_dir + 'database'
-log_file = config_dir + 'log.txt'
+config_dir = home + '/.habitjewel'
 
-
-# Detect if running locally or not
-running_path = sys.path[0]
-if running_path.startswith('/opt'):
-    locally = False
-else:
-    locally = True
-
-if locally:
-    img_dir = 'pixmaps/'
-else:
-    app_dir = '/opt/habitjewel/'
-    img_dir = app_dir + 'pixmaps/'
-
-
-
-# Check for config dir, database. Create if necessary
+# Check for config dir
 if not os.path.exists(config_dir):
     os.mkdir(config_dir)
 
-if os.path.exists(db_file):
-    conn = sqlite3.connect(db_file)
-else:
-    conn = sqlite3.connect(db_file)
-    cursor = conn.cursor()
-    print 'creating new database'
-    cursor.execute(
-        """
-        CREATE TABLE goals (id INTEGER PRIMARY KEY, title TEXT,
-            priority INTEGER, category_id INTEGER, due_date DATE,
-            points_threshold INTEGER, created_date DATE, deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE goal_habits (id INTEGER PRIMARY KEY,
-            goal_id INTEGER, habit_id INTEGER)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE habits (id INTEGER PRIMARY KEY,
-            activity TEXT,
-            measure_id INTEGER,
-            target INTEGER,
-            priority INTEGER,
-            interval_code TEXT,
-            interval INTEGER,
-            limit_week_day_nums STRING,
-            points INTEGER,
-            created_date DATE,
-            paused_until_date DATE,
-            deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE interval_types (id INTEGER PRIMARY KEY, code TEXT,
-            desc TEXT, created_date DATE, deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE categories (id INTEGER PRIMARY KEY, title TEXT,
-            created_date DATE, deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE history (id INTEGER PRIMARY KEY, habit_id INTEGER, date DATE,
-            percent_complete INTEGER)
-        """)
-    cursor.execute(
-        """
-        CREATE TABLE measures (id INTEGER PRIMARY KEY, unit TEXT, plural TEXT, desc TEXT,
-            created_date DATE, deleted_date DATE)
-        """)
-    cursor.execute(
-        """
-        INSERT INTO categories (title, created_date) VALUES (?, CURRENT_DATE)
-        """, ['Mental'])
-    cursor.execute(
-        """
-        INSERT INTO categories (title, created_date) VALUES (?, CURRENT_DATE)
-        """, ['Exercise'])
-    cursor.execute(
-        """
-        INSERT INTO categories (title, created_date) VALUES (?, CURRENT_DATE)
-        """, ['Academic'])
-    cursor.execute(
-        """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['DAY', 'Daily'])
-    cursor.execute(
-        """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['WEEK', 'Weekly'])
-    cursor.execute(
-        """
-        INSERT INTO interval_types (code, desc, created_date)
-            VALUES (?, ?, CURRENT_DATE)
-        """, ['MONTH', 'Monthly'])
-    cursor.execute(
-        """
-        INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
-        """, ['min', 'mins', 'minute'])
-    cursor.execute(
-        """
-        INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
-        """, ['hour', 'hours', 'hour'])
-    cursor.execute(
-        """
-        INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
-        """, ['km', 'kms', 'kilometre'])
-    cursor.execute(
-        """
-        INSERT INTO measures (unit, plural, desc, created_date) VALUES (?, ?, ?, CURRENT_DATE)
-        """, ['word', 'words', 'words'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, points, created_date)
-            VALUES (?, 1, 30, 1, 'DAY', 100, CURRENT_DATE)
-        """, ['Meditate'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'WEEK', 1, 100, CURRENT_DATE)
-        """, ['Study French'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 30, 1, 'WEEK', 1, 100, CURRENT_DATE)
-        """, ['Study Spanish'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 1, 60, 1, 'MONTH', 1, 100, CURRENT_DATE)
-        """, ['Study software development'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, limit_week_day_nums, points, created_date)
-            VALUES (?, 2, 2, 2, 'DAY', 1, '0,1,3,5', 100, CURRENT_DATE)
-        """, ['Walk'])
-    cursor.execute(
-        """
-        INSERT INTO habits (activity, measure_id, target, priority,
-            interval_code, interval, points, created_date)
-            VALUES (?, 2, 50, 3, 'WEEK', 1, 100, CURRENT_DATE)
-        """, ['Cycle'])
-    
-    conn.commit()
-    cursor.close()
 
 
 
+
+####################
+### MainWindow class
+####################
 
 class MainWindow:
 
     def __init__(self):
-        gettext.install('habitjewel','/opt/habitjewel/share/locale')
+        self.db = habitjewel_db.HabitJewelDb(config_dir, VERSION)
+
+        gettext.install(APP_SYSTEM_NAME,'/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
         self.view_date_dt = self.get_today_dt()
 
         self.program = hildon.Program()
         self.program.__init__()
-        gtk.set_application_name('Habitjewel')
+        gtk.set_application_name(APP_DISPLAY_NAME)
 
         # Rotation setup
         orientation = self.get_current_screen_orientation()
@@ -321,12 +188,13 @@ class MainWindow:
         self.program.add_window(self.top_win)
 
         # N900-specific
-        self.osso_app_name = 'habitjewel'
+        self.osso_app_name = APP_SYSTEM_NAME
         self.rotation_obj = self.init_autorotation()
 
-        # Below to be removed (probably)
-        # How does it compare to the current rotation strategy?
-        #self.rotation = FremantleRotation('HabitJewel', None, VERSION, 0)
+        # Determine current orientation
+        orientation = self.get_current_screen_orientation()
+        self.last_orientation = orientation
+        self.set_window_orientation_params(orientation)
 
         # Set up callback for the Gdk.Window destroy signal
         self.top_win.connect('destroy', gtk.main_quit)
@@ -336,7 +204,10 @@ class MainWindow:
         # Menus
         menu = self.setup_main_menu()
         self.top_win.set_app_menu(menu)
-        self.setup_hildon_ui_manager()
+        self.setup_popup_menus()
+
+        # Initialise Timer
+        self.timer = {}
 
         self.top_container = self.get_day_habits_list_container()
         self.top_win.add(self.top_container)
@@ -346,12 +217,12 @@ class MainWindow:
 
     def init_autorotation(self):
         try:
-            import n900_maemo5_portrait
-            r_object = n900_maemo5_portrait.FremantleRotation(self.osso_app_name, main_window=self.top_win)
+            import fremantle_rotation
+            r_object = fremantle_rotation.FremantleRotation(self.osso_app_name, main_window=self.top_win, version=VERSION, mode=0)
             return r_object
 
-        except Exception:
-            print "LOGME: Initialising rotation object failed"
+        except:
+            print 'LOGME: Initialising rotation object failed'
 
 
     def set_window_orientation_params(self, orientation):
@@ -359,13 +230,13 @@ class MainWindow:
             self.button_size = gtk.HILDON_SIZE_THUMB_HEIGHT
             self.tv_day_activity_wrap_width    = TV_DAY_ACTIVITY_WRAP_WIDTH_PORTRAIT
             self.tv_master_activity_wrap_width = TV_MASTER_ACTIVITY_WRAP_WIDTH_PORTRAIT
-            self.tv_master_repeats_wrap_width  = TV_MASTER_REPEATS_WRAP_WIDTH_PORTRAIT
+            self.tv_master_quota_wrap_width  = TV_MASTER_QUOTA_WRAP_WIDTH_PORTRAIT
 
         else:
             self.button_size = gtk.HILDON_SIZE_FINGER_HEIGHT
             self.tv_day_activity_wrap_width    = TV_DAY_ACTIVITY_WRAP_WIDTH_LANDSCAPE
             self.tv_master_activity_wrap_width = TV_MASTER_ACTIVITY_WRAP_WIDTH_LANDSCAPE
-            self.tv_master_repeats_wrap_width  = TV_MASTER_REPEATS_WRAP_WIDTH_LANDSCAPE
+            self.tv_master_quota_wrap_width  = TV_MASTER_QUOTA_WRAP_WIDTH_LANDSCAPE
 
 
 
@@ -404,15 +275,7 @@ class MainWindow:
     def get_stackable_window(self, title):
         win = hildon.StackableWindow()
         win.set_title(title)
-        #orientation = self.get_current_screen_orientation()
-        #self.window_last_orientations[title] = orientation
-        #self.set_window_orientation_params(title, orientation)
-        #win.connect('destroy', self.on_general_stackable_window_destroy)
         return win
-
-
-#    def on_general_stackable_window_destroy(self, win):
-#        gobject.idle_add(self.on_screen_orientation_changed)
 
 
     def event_catcher(self, widget, event):
@@ -430,9 +293,9 @@ class MainWindow:
             return
 
         self.last_orientation = orientation
+        self.set_window_orientation_params(orientation)
 
         # Re-render the top window, even if behind another window
-        self.set_window_orientation_params(orientation)
         self.top_win.remove(self.top_container)
         self.top_container = self.get_day_habits_list_container()
         self.top_win.add(self.top_container)
@@ -447,15 +310,17 @@ class MainWindow:
         # Rotation for Master Habits List
         if active_window_title == _(WIN_TITLE_MASTER_HABITS_LIST):
             self.mhl_win.remove(self.mhl_container)
-            #self.mhl_container.destroy()
             self.mhl_container = self.get_master_habits_list_container()
             self.mhl_win.add(self.mhl_container)
             self.mhl_win.show_all()
 
-        # Rotation for Add/Edit Habit window
-        elif active_window_title == _(WIN_TITLE_ADD_NEW_HABIT) or \
-             active_window_title == _(WIN_TITLE_EDIT_HABIT):
-            print "TODO: rotation in Add/Edit Habit window"
+        # Rotation for Timer window
+        elif active_window_title == _(WIN_TITLE_TIMER):
+            # No need to re-layout at present
+            self.timer_win.remove(self.timer_container)
+            self.timer_container = self.get_timer_container()
+            self.timer_win.add(self.timer_container)
+            self.timer_win.show_all()
 
 
 
@@ -467,21 +332,16 @@ class MainWindow:
 
 
     def set_db_habit_deleted_date(self, habit, deleted_date_dt):
-        habitjewel_utils.delete_habit(conn, habit['id'])
+        self.db.delete_habit(habit['id'])
         self.show_info_banner(self.top_win, '"' + habit['activity'] + '" deleted')
 
 
     def set_db_habit_paused_until_date (self, habit, paused_until_date_dt):
-        # Can this be changed to pass habit to below func?
-        habitjewel_utils.set_db_habit_paused_until_date (conn,
-                habit['id'], paused_until_date_dt
-            )
+        self.db.set_habit_paused_until_date (habit['id'], paused_until_date_dt)
         if paused_until_date_dt:
             self.show_info_banner(self.top_win, '"' + habit['activity'] + '" paused until ' + self.dt_to_display_date(paused_until_date_dt))
         else:
             self.show_info_banner(self.top_win, '"' + habit['activity'] + '" unpaused')
-
-
 
 
 
@@ -509,6 +369,13 @@ class MainWindow:
 
     def dt_to_db_date(self, dt):
         return dt.strftime('%Y-%m-%d')
+
+
+    def dt_to_day_number(self, dt):
+        day_num = int(dt.strftime('%w'))
+        if day_num == 0:
+            day_num = 7
+        return day_num
 
 
     def get_today_dt(self):
@@ -634,9 +501,12 @@ class MainWindow:
         button.connect('clicked', self.on_main_menu_go_to_date_click)
         menu.append(button)
 
+        # Stats page not yet implemented
+        """
         button = gtk.Button(_('Stats'))
         button.connect('clicked', self.on_main_menu_stats_click)
         menu.append(button)
+        """
 
         button = gtk.Button(_('Master Habits list'))
         button.connect('clicked', self.on_main_menu_master_habits_list_click)
@@ -652,74 +522,101 @@ class MainWindow:
         return menu
 
 
-    # Set up UI Manager/context menus
-    def setup_hildon_ui_manager(self):
-        self.h_ui_manager = gtk.UIManager()
-        h_ui_desc = """
-            <ui>
-              <popup action="tvdayactivitycmenu">
-                <menuitem action="unpause"/>
-                <menu action="pausemenu">
-                  <menuitem action="pause1day"/>
-                  <menuitem action="pause2days"/>
-                  <menuitem action="pause1week"/>
-                  <menuitem action="pause2weeks"/>
-                  <menuitem action="pauseuntildate"/>
-                </menu>
-                <menuitem action="edithabit"/>
-                <menuitem action="deletehabit"/>
-              </popup>
-              <popup name="tvdaystatuscmenu">
-                <menuitem action="habitdone"/>
-                <separator/>
-                <menuitem action="habit75pcdone"/>
-                <menuitem action="habit50pcdone"/>
-                <menuitem action="habit25pcdone"/>
-                <separator/>
-                <menuitem action="habitmissed"/>
-                <separator/>
-                <menuitem action="habitclear"/>
-              </popup>
-              <popup name="tvmasteractivitycmenu">
-                <menuitem action="masteredithabit"/>
-              </popup>
-            </ui>
-        """
+    def get_generated_hildon_context_menu(self, menu_def):
+        m = gtk.Menu()
+        m.set_name('hildon-context-sensitive-menu')
 
-        h_actions = (
-                ('unpause', None, _('Unpause'), None, None, self.on_day_activity_cmenu_unpause_selected),
-                ('pausemenu', None, _('Pause until...')),
-                ('pause1day', None, _('tomorrow'), None, None, self.on_day_activity_cmenu_pause_1_day_selected),
-                ('pause2days', None, _('2 days from now'), None, None, self.on_day_activity_cmenu_pause_2_days_selected),
-                ('pause1week', None, _('1 week from now'), None, None, self.on_day_activity_cmenu_pause_1_week_selected),
-                ('pause2weeks', None, _('2 weeks from now'), None, None, self.on_day_activity_cmenu_pause_2_weeks_selected),
-                ('pauseuntildate', None, _('specific date'), None, None, self.on_day_activity_cmenu_pause_until_date_selected),
-                ('edithabit', None, _('Edit Habit'), None, None, self.on_day_activity_cmenu_edit_selected),
-                ('deletehabit', None, _('Delete Habit'), None, None, self.on_day_activity_cmenu_delete_selected),
-                ('habitdone', None, _('Done'), None, None, self.on_status_cmenu_done_selected),
-                ('habit75pcdone', None, _('75%'), None, None, self.on_status_cmenu_75pct_selected),
-                ('habit50pcdone', None, _('50%'), None, None, self.on_status_cmenu_50pct_selected),
-                ('habit25pcdone', None, _('25%'), None, None, self.on_status_cmenu_25pct_selected),
-                ('habitmissed', None, _('Missed'), None, None, self.on_status_cmenu_missed_selected),
-                ('habitclear', None, _('Clear'), None, None, self.on_status_cmenu_clear_selected),
-                ('masteredithabit', None, _('Edit Habit'), None, None, self.on_master_activity_cmenu_edit_selected),
-        )
+        for item in menu_def:
+            if item[0] == 'menu':
+                smi = gtk.MenuItem(_(item[1]))
+                m.append(smi)
+                sm = gtk.Menu()
+                sm.set_name('hildon-context-sensitive-menu')
+                smi.set_submenu(sm)
 
-        h_action_group = gtk.ActionGroup('Actions')
-        h_action_group.add_actions(h_actions)
-        self.h_ui_manager.insert_action_group(h_action_group, 0)
-        self.h_ui_manager.add_ui_from_string(h_ui_desc)
-        # tap and hold on day treeview habit activity
-        self.h_tv_day_activity_cmenu = self.h_ui_manager.get_widget('/tvdayactivitycmenu')
-        # tap and hold on day treeview habit status (checkbox)
-        self.h_tv_day_status_cmenu = self.h_ui_manager.get_widget('/tvdaystatuscmenu')
-        # tap and hold on day treeview habit activity
-        self.h_tv_master_activity_cmenu = self.h_ui_manager.get_widget('/tvmasteractivitycmenu')
+                for subitem in item[2]:
+                    i = gtk.MenuItem(_(subitem[0]))
+                    i.connect("activate", subitem[1])
+                    sm.append(i)
+
+            else:
+                mi = gtk.MenuItem(_(item[0]))
+                mi.connect("activate", item[1])
+                m.append(mi)
+
+        m.show_all()
+
+        return m
+
+
+    def get_day_activity_cmenu(self, hide_pause_submenu = False, show_unpause = False):
+        menu_def = []
+        if show_unpause:
+            menu_def.extend([ \
+                ['Unpause Habit', self.on_day_activity_cmenu_unpause_selected], \
+            ])
+
+        elif not hide_pause_submenu:
+            menu_def.extend([ \
+                    ['menu', 'Pause...', \
+                        [ \
+                            ['until tomorrow', self.on_day_activity_cmenu_pause_1_day_selected], \
+                            ['2 days', self.on_day_activity_cmenu_pause_2_days_selected], \
+                            ['1 week', self.on_day_activity_cmenu_pause_1_week_selected], \
+                            ['2 weeks', self.on_day_activity_cmenu_pause_2_weeks_selected], \
+                            ['until date', self.on_day_activity_cmenu_pause_until_date_selected], \
+                        ], \
+                    ], \
+            ])
+
+        menu_def.extend(( \
+            ['Edit Habit', self.on_day_activity_cmenu_edit_selected], \
+            ['Delete Habit', self.on_day_activity_cmenu_delete_selected], \
+        ))
+
+        return self.get_generated_hildon_context_menu(menu_def)
+
+
+    def get_day_status_cmenu(self, show_open_timer = False):
+        menu_def = []
+        if show_open_timer:
+            menu_def.extend([ \
+                    ['Open Timer', self.on_status_cmenu_open_timer_selected], \
+            ])
+
+        menu_def.extend([ \
+                ['Done', self.on_status_cmenu_done_selected], \
+                ['75%', self.on_status_cmenu_75pct_selected], \
+                ['50%', self.on_status_cmenu_50pct_selected], \
+                ['25%', self.on_status_cmenu_25pct_selected], \
+                ['Clear', self.on_status_cmenu_clear_selected], \
+                ['Missed', self.on_status_cmenu_missed_selected], \
+        ])
+
+        return self.get_generated_hildon_context_menu(menu_def)
+
+
+    def get_master_activity_cmenu(self):
+        menu_def = [ \
+                ['Edit Habit', self.on_master_activity_cmenu_edit_selected], \
+                ['Clone Habit', self.on_master_activity_cmenu_clone_selected], \
+                ['Delete Habit', self.on_master_activity_cmenu_delete_selected], \
+        ]
+
+
+        return self.get_generated_hildon_context_menu(menu_def)
+
+
+    def setup_popup_menus(self):
+        self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
+        self.h_tv_day_status_cmenu = self.get_day_status_cmenu()
+        self.h_tv_master_activity_cmenu = self.get_master_activity_cmenu()
 
 
     def popup_hildon_menu(self, menu):
-        menu.set_name('hildon-context-sensitive-menu')
-        menu.popup(None, None, None, 3, 0)
+        # Pop up the menu given
+        # Use mouse button 0 (4th arg) otherwise submenus don't work properly
+        menu.popup(None, None, None, 0, 0)
 
 
     def on_main_menu_stats_click(self, widget):
@@ -754,40 +651,35 @@ class MainWindow:
         iter = buf.get_iter_at_offset(0)
         i_tag = buf.create_tag('i', style=pango.STYLE_ITALIC)
         b_tag = buf.create_tag('b', weight=pango.WEIGHT_BOLD)
-        buf.insert_with_tags(iter, 'HabitJewel', b_tag)
+        buf.insert_with_tags(iter, APP_DISPLAY_NAME + ' v' + VERSION, b_tag)
         buf.insert(iter, ', copyright © Ashley Hooper, 2016\n\n')
-        buf.insert_with_tags(iter, 'HabitJewel', i_tag)
+        buf.insert_with_tags(iter, APP_DISPLAY_NAME, i_tag)
         buf.insert(iter, ' tracks your desired habits and their fulfillment on a regular \
 basis, helping to motivate your self-improvement.\n\n')
         buf.insert(iter, 'Habits are defined as follows:\n\n\
 * The activity (e.g. ')
-        buf.insert_with_tags(iter, 'Meditate', i_tag)
+        buf.insert_with_tags(iter, 'Study complex algorithms', i_tag)
         buf.insert(iter, ')\n\
 * The target for each repetition of the habit, e.g. 20 minutes\n\
-* The repetition interval, which determines how often you want to perform the habit\n\n\
-The repetition interval can be either:\n\
-a) ')
-        buf.insert_with_tags(iter, 'day-based', i_tag)
-        buf.insert(iter, ', repeating either every day or selected days of the week such \
-as Monday, Wednesday, Friday\n\
-b) ')
-        buf.insert_with_tags(iter, 'week-based', i_tag)
-        buf.insert(iter, ', repeating once for every ')
-        buf.insert_with_tags(iter, 'n', i_tag)
-        buf.insert(iter, 'weeks\n\
-c) ')
-        buf.insert_with_tags(iter, 'month-based', i_tag)
-        buf.insert(iter, ', repeating once for every ')
-        buf.insert_with_tags(iter, 'n', i_tag)
-        buf.insert(iter, ' months\n\n\
+* The weekly quota, which is the number of times per week you want to perform the habit\n\
+* The priority for the habit, which determines how important the habit is and its sorting order\n\n\
 After creating your habits they are displayed on the main page, along with \
 navigation buttons to go back or forward one day at a time. For each day, the \
 habits that would be current for that day are displayed. A checkbox allows \
-toggling the fulfillment status of each habit, either undetermined (empty \
-box), completed (green tick), or missed (red cross).\n\n\
+toggling the fulfillment status of each habit, either:\n\n\
+* undetermined (empty box)\n\
+* completed (green tick)\n\
+* partially complete (checkbox partially filled with yellow), or\n\
+* missed (red cross)\n\n\
+The habit fulfillment status for the current day can be set by a right click/tap and hold \
+on the checkbox column, then selecting the desired status from the popup menu.\n\n\
 The status of a habit for the current day or any preceding day can be changed \
 at any time, but for reasons that should be obvious, the fulfillment status of \
-habits for future dates can not be set.')
+habits for future dates can not be set.\n\n\
+To edit, pause/unpause, or delete a habit, perform a right click/tap and hold on the \
+activity description in the day habits view.\n\n\
+The Master Habits List, accessible from the main menu allows editing, deletion, undeletion, \
+etc. of all habits, whereas the daily habits view only shows habits for the current day.')
         text.set_buffer(buf)
         pan.add(text)
         vbox.pack_start(pan)
@@ -803,6 +695,43 @@ habits for future dates can not be set.')
 
 
 
+    ##################################
+    # General Habits-related functions
+    ##################################
+
+
+    def completion_pct_to_status_rgb_color(self, completion):
+        if completion > 0:
+            if completion > 100:
+                completion = 100
+            red = (100 - completion) * 0.01
+            green = (completion * 0.004) + 0.6
+            blue = 0.0
+        else:
+            red = 0.6
+            green = 0.6
+            blue = 0.6
+        return [red, green, blue]
+
+
+    def fraction_to_hex(self, fraction):
+        if fraction > 0:
+            return int(fraction * 256) - 1
+        else:
+            return 0
+
+
+    def completion_pct_to_status_hex_color(self, completion):
+        [red, green, blue] = self.completion_pct_to_status_rgb_color(completion)
+        red   = self.fraction_to_hex(red)
+        green = self.fraction_to_hex(green)
+        blue  = self.fraction_to_hex(blue)
+        return '#%02x%02x%02x' % (red, green, blue)
+
+
+
+
+
     ##############################
     # Master Habits List functions
     ##############################
@@ -813,17 +742,36 @@ habits for future dates can not be set.')
 
         self.master_habits_list_tv = hildon.GtkTreeView(gtk.HILDON_UI_MODE_NORMAL)
         self.master_habits_list_tv.set_headers_visible(True)
-        model = self.create_master_habits_list_model()
-        self.master_habits_list_tv.set_model(model)
+        self.master_habits_list_model = self.create_master_habits_list_model()
+        self.master_habits_list_tv.set_model(self.master_habits_list_model)
         self.add_columns_to_master_habits_list_tv(self.master_habits_list_tv)
-        self.populate_master_habits_list_ls(model, self.master_habits_list)
+        self.populate_master_habits_list_ls(self.master_habits_list_model, self.master_habits_list)
 
         self.master_habits_list_tv.connect('button-press-event', self.on_master_habits_list_button_press)
 
         self.master_habits_list_tv.tap_and_hold_setup(None)
         self.master_habits_list_tv.connect('tap-and-hold', self.on_master_tv_habit_tap_and_hold)
 
+        # Create the outermost container
         vbox = gtk.VBox()
+
+        # Create the New Habit button
+        hbox = gtk.HBox()
+        img = gtk.image_new_from_icon_name("general_add", gtk.ICON_SIZE_SMALL_TOOLBAR)
+        img.set_alignment(0.95, 0.5)
+        hbox.pack_start(img, True, True, 0)
+                        
+        label = gtk.Label(_("New Habit"))
+        label.set_alignment(0.05, 0.5)
+        hbox.pack_start(label, True, True, 0)
+
+        button = hildon.Button(self.button_size, hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        button.connect("clicked", self.on_master_habits_list_new_habit_click)
+        button.add(hbox)
+
+        vbox.pack_start(button, False, False, 0)
+
+        # Create the pannable area for the treeview
         pan_area = hildon.PannableArea()
         pan_area.add(self.master_habits_list_tv)
         vbox.pack_start(pan_area)
@@ -832,11 +780,11 @@ habits for future dates can not be set.')
 
 
     def create_master_habits_list_model(self):
-        return gtk.ListStore(int, str, str, str, str, str)
+        return gtk.ListStore(int, gtk.gdk.Pixbuf, str, str, str, str, str)
 
 
     def fetch_master_habits_list(self):
-        return habitjewel_utils.get_habits_list_all(conn)
+        return self.db.get_habits_list_all()
 
 
     def add_columns_to_master_habits_list_tv(self, treeview):
@@ -845,29 +793,30 @@ habits for future dates can not be set.')
         c_id.set_visible(False)
         treeview.append_column(c_id)
 
+        # column for status icon
+        pixbuf = gtk.CellRendererPixbuf()
+        c_pixbuf = gtk.TreeViewColumn(TV_MASTER_COL_NAME_ICON, pixbuf, pixbuf=TV_MASTER_COL_NUM_ICON)
+        treeview.append_column(c_pixbuf)
+
         # column for activity
         r_activity = gtk.CellRendererText()
         r_activity.set_property('wrap-mode', gtk.WRAP_WORD)
         r_activity.set_property('wrap-width', self.tv_master_activity_wrap_width)
         c_activity = gtk.TreeViewColumn(TV_MASTER_COL_NAME_ACTIVITY, r_activity, markup=TV_MASTER_COL_NUM_ACTIVITY)
         c_activity.set_property('expand', True)
+        c_activity.set_property('sizing', gtk.TREE_VIEW_COLUMN_GROW_ONLY)
         treeview.append_column(c_activity)
 
-        # column for repeats
-        r_repeats = gtk.CellRendererText()
-        r_repeats.set_property('wrap-mode', gtk.WRAP_WORD)
-        r_repeats.set_property('wrap-width', self.tv_master_repeats_wrap_width)
-        c_repeats = gtk.TreeViewColumn(TV_MASTER_COL_NAME_REPEATS, r_repeats, markup=TV_MASTER_COL_NUM_REPEATS)
-        c_repeats.set_property('expand', True)
-        treeview.append_column(c_repeats)
+        # column for weekly quota display (e.g. 1/Week)
+        r_quota = gtk.CellRendererText()
+        r_quota.set_property('wrap-mode', gtk.WRAP_WORD)
+        r_quota.set_property('wrap-width', self.tv_master_quota_wrap_width)
+        c_quota = gtk.TreeViewColumn(TV_MASTER_COL_NAME_QUOTA_DISP, r_quota, markup=TV_MASTER_COL_NUM_QUOTA_DISP)
+        c_quota.set_property('expand', True)
+        treeview.append_column(c_quota)
 
-        # column for interval type (code)
-        c_intvl_code = gtk.TreeViewColumn(TV_MASTER_COL_NAME_INTVL_CODE, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_INTVL_CODE)
-        c_intvl_code.set_visible(False)
-        treeview.append_column(c_intvl_code)
-
-        # column for interval
-        c_intvl = gtk.TreeViewColumn(TV_MASTER_COL_NAME_INTVL, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_INTVL)
+        # column for weekly quota
+        c_intvl = gtk.TreeViewColumn(TV_MASTER_COL_NAME_QUOTA, gtk.CellRendererText(), text=TV_MASTER_COL_NUM_QUOTA)
         c_intvl.set_visible(False)
         treeview.append_column(c_intvl)
 
@@ -881,29 +830,6 @@ habits for future dates can not be set.')
         for item in master_habits_list:
             lstore_iter = model.append()
 
-            repeats = 'never'
-            if item['interval_code'] == 'DAY':
-                days_list = []
-                if item['limit_week_day_nums']:
-                    for i in range(7):
-                        if item['limit_week_day_nums'].find(str(i)) != -1:
-                            days_list.append(calendar.day_abbr[i])
-                        repeats = ",".join(days_list)
-                else:
-                    repeats = 'Daily'
-
-            elif item['interval_code'] == 'WEEK':
-                if item['interval'] == 1:
-                    repeats = 'Weekly'
-                else: 
-                    repeats = str(item['interval']) + ' weeks' 
-
-            elif item['interval_code'] == 'MONTH':
-                if item['interval'] == 1:
-                    repeats = 'Monthly'
-                else: 
-                    repeats = str(item['interval']) + ' months' 
-
             if item['deleted_date']:
                 status = 'deleted'
             elif item['paused_until_date']:
@@ -911,20 +837,38 @@ habits for future dates can not be set.')
             else:
                 status = 'active'
 
+            activity_markup = item['activity']
+
+            if item['null_measure'] != 1:
+                activity_markup += ' <small>' + str(item['target_desc']) + '</small>';
+
+            icon_pixbuf = self.get_pixbuf_filename_for_master_status(status)
+
             model.set(lstore_iter, \
                 TV_MASTER_COL_NUM_ID, \
                     item['id'], \
+                TV_MASTER_COL_NUM_ICON, \
+                    icon_pixbuf, \
                 TV_MASTER_COL_NUM_ACTIVITY, \
-                    '<b>' + item['activity'] + '</b> ' + str(item['target_desc']), \
-                TV_MASTER_COL_NUM_REPEATS, \
-                    repeats, \
-                TV_MASTER_COL_NUM_INTVL_CODE, \
-                    item['interval_code'], \
-                TV_MASTER_COL_NUM_INTVL, \
-                    item['interval'], \
+                    activity_markup, \
+                TV_MASTER_COL_NUM_QUOTA_DISP, \
+                    str(item['weekly_quota']) + ' / ' + _('week'), \
+                TV_MASTER_COL_NUM_QUOTA, \
+                    item['weekly_quota'], \
                 TV_MASTER_COL_NUM_STATUS, \
                     status \
             )
+
+
+    def get_pixbuf_filename_for_master_status(self, status):
+        if (status == 'deleted'):
+            icon_filename = MASTER_STATUS_DELETED_PIXBUF_FILE
+        elif (status == 'paused'):
+            icon_filename = MASTER_STATUS_PAUSED_PIXBUF_FILE
+        else:
+            icon_filename = MASTER_STATUS_ACTIVE_PIXBUF_FILE
+
+        return gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
 
 
     def on_master_habits_list_button_press(self, widget, event):
@@ -947,12 +891,17 @@ habits for future dates can not be set.')
             self.touched_habit = None
 
 
+    def on_master_habits_list_new_habit_click (self, widget):
+        habit = None
+        self.habit_edit_window(habit)
+
+
     def on_master_tv_habit_tap_and_hold(self, widget):
         if not self.touched_tv_col_title:
             return
         if self.touched_tv_col_title == TV_MASTER_COL_NAME_ACTIVITY:
             gobject.idle_add(self.popup_hildon_menu, self.h_tv_master_activity_cmenu)
-        #elif self.touched_tv_col_title == TV_MASTER_COL_NAME_REPEATS:
+        #elif self.touched_tv_col_title == TV_MASTER_COL_NAME_QUOTA:
         #    gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_status_cmenu)
 
 
@@ -963,10 +912,35 @@ habits for future dates can not be set.')
             self.habit_edit_window(self.touched_habit)
 
 
+    def on_master_activity_cmenu_clone_selected(self, action):
+        if not self.touched_habit:
+            return
+        else:
+            new_activity = self.touched_habit['activity'] + ' (' + _('copy') + ')'
+            self.db.clone_habit(self.touched_habit['id'], new_activity)
+            self.redraw_master_habits_list()
+
+
+    def on_master_activity_cmenu_delete_selected(self, action):
+        if not self.touched_habit:
+            return
+        else:
+            self.db.delete_habit(self.touched_habit['id'])
+            self.redraw_master_habits_list()
+
+
     def on_master_habits_list_window_destroy(self, win):
         # Clear data structures and widgets
-        self.master_habits_list = None
         self.master_habits_list_tv = None
+        self.master_habits_list_model = None
+        self.master_habits_list = None
+
+
+    def redraw_master_habits_list(self):
+        self.master_habits_list_model.clear()
+        self.master_habits_list = self.fetch_master_habits_list()
+        self.populate_master_habits_list_ls(self.master_habits_list_model, self.master_habits_list)
+        self.redraw_window()
 
 
 
@@ -978,13 +952,16 @@ habits for future dates can not be set.')
 
 
     def get_day_habits_list_container(self):
-        self.vbox_outer = gtk.VBox(False)
-        self.pan_area = hildon.PannableArea()
+        self.day_habits_list = self.fetch_habits_list_for_date(self.view_date_dt)
 
         self.day_habits_list_tv = hildon.GtkTreeView(gtk.HILDON_UI_MODE_NORMAL)
-        # TODO: check if below is necessary
-        #self.day_habits_list_tv.set_name('DailyHabitsListTreeview')
-        #self.areaview = self.day_habits_list_tv.get_action_area_box()
+        self.day_habits_list_model = self.create_day_habits_list_model()
+        self.day_habits_list_tv.set_model(self.day_habits_list_model)
+        self.add_columns_to_day_habits_list_tv(self.day_habits_list_tv)
+        self.populate_day_habits_list_ls(self.day_habits_list)
+
+        self.vbox_outer = gtk.VBox(False)
+        self.pan_area = hildon.PannableArea()
 
         # HBox for 'prev' button
         self.hbox_prev = gtk.HBox()
@@ -1025,26 +1002,13 @@ habits for future dates can not be set.')
 
         self.vbox_nav.pack_start(self.hbox_nav, False)
 
-        self.day_habits_list_model = self.create_day_habits_list_model()
-        self.day_habits_list_tv.set_model(self.day_habits_list_model)
-        self.add_columns_to_day_habits_list_tv(self.day_habits_list_tv)
-        self.day_habits_list = self.fetch_habits_list_for_date(self.view_date_dt)
-        self.populate_day_habits_list_ls(self.day_habits_list)
-
         self.day_habits_list_tv.connect('button-press-event', self.on_day_habits_list_button_press)
+
 
         self.day_habits_list_tv.tap_and_hold_setup(None)
         self.day_habits_list_tv.connect('tap-and-hold', self.on_day_tv_habit_tap_and_hold)
 
         self.pan_area.add(self.day_habits_list_tv)
-
-        """
-        if first_run:
-            vbox_first_run = gtk.VBox()
-            first_run_label = gtk.Label(_('No habits'))
-            vbox_first_run.pack_start(first_run_label) 
-            self.pan_area.add(vbox_first_run)
-        """
 
         self.vbox_outer.pack_start(self.vbox_nav, False)
         self.vbox_outer.pack_start(self.pan_area, True, True)
@@ -1057,7 +1021,7 @@ habits for future dates can not be set.')
             return
         if self.touched_tv_col_title == TV_DAY_COL_NAME_ACTIVITY:
             gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_activity_cmenu)
-        elif self.touched_tv_col_title == TV_DAY_COL_NAME_PIXBUF:
+        elif self.touched_tv_col_title == TV_DAY_COL_NAME_CHECKBOX:
             gobject.idle_add(self.popup_hildon_menu, self.h_tv_day_status_cmenu)
 
 
@@ -1075,53 +1039,137 @@ habits for future dates can not be set.')
             for habit in self.day_habits_list:
                 if habit['id'] == index:
                     self.touched_habit = habit
+                    today_dt = self.get_today_dt()
+
                     show_unpause = False
+                    show_open_timer = False
+
                     if habit['paused_until_date']:
                         paused_until_date_dt = self.db_date_to_dt(habit['paused_until_date'])
-                        today_dt = self.get_today_dt()
                         if paused_until_date_dt > today_dt:
                             show_unpause = True
 
+                    if habit['to_minutes'] and self.view_date_dt == today_dt:
+                        show_open_timer = True
+
+
+                    # Refresh the activity context menu to show the unpause option
                     if show_unpause:
-                        self.h_ui_manager.get_widget('/tvdayactivitycmenu/unpause/').show()
+                        self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True, True)
                     else:
-                        self.h_ui_manager.get_widget('/tvdayactivitycmenu/unpause/').hide()
+                        self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
+                    
+
+                    # Refresh the status context menu to show the start timer option
+                    if show_open_timer:
+                        self.h_tv_day_status_cmenu = self.get_day_status_cmenu(True)
+                    else:
+                        self.h_tv_day_status_cmenu = self.get_day_status_cmenu()
                     break
         else:
             self.touched_habit = None
 
 
     def create_day_habits_list_model(self):
-        lstore = gtk.ListStore(int, str, gtk.gdk.Pixbuf, int, str)
+        lstore = gtk.ListStore(int, str, gtk.gdk.Pixbuf, gtk.gdk.Pixbuf, int, str)
         # add columns to the tree view
         return lstore
 
 
     def fetch_habits_list_for_date(self, view_date_dt):
-        return habitjewel_utils.get_habits_list_for_date(conn, view_date_dt)
+        return self.db.get_habits_list_for_date(view_date_dt)
 
 
     def populate_day_habits_list_ls(self, day_habits_list):
+        day_num_of_week = self.dt_to_day_number(self.view_date_dt)
+
         for item in day_habits_list:
             lstore_iter = self.day_habits_list_model.append()
-            icon_pixbuf = self.get_pixbuf_filename_for_status (item['pct_complete'])
+            checkbox_pixbuf = self.get_pixbuf_filename_for_completion_status(item['pct_complete'])
  
+            activity_markup = item['activity']
+
+            if item['null_measure'] != 1:
+                activity_markup += ' <i><small>' + str(item['target_desc']) + '</small></i>';
+
+            if item['weekly_quota'] > 1:
+                if item['completion_total'] > 0:
+                    # Calculate a percentage completion for the week up to the current view date
+                    progress = ((float(item['completion_total']) / float(day_num_of_week)) / float(item['weekly_quota'])) * day_num_of_week * 100
+                else:
+                    progress = 0
+
+                highlight_colour = self.completion_pct_to_status_hex_color(progress)
+                activity_markup += ' <span foreground="' + str(highlight_colour) + '"> <small>' + str(item['completion_total']) + '/' + \
+                        str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
+
+            # Render the last 7 days history graph for the habit
+            pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
+                    HABIT_RECENT_HIST_PIXBUF_SIZE, HABIT_RECENT_HIST_PIXBUF_SIZE)
+            pixbuf.fill(0x00000000)
+            pixmap, mask = pixbuf.render_pixmap_and_mask()
+
+            pixmap = gtk.gdk.Pixmap(None, HABIT_RECENT_HIST_PIXBUF_SIZE, \
+                    HABIT_RECENT_HIST_BAR_HEIGHT + 8, 16)
+            cr = pixmap.cairo_create()
+
+            # Graph previous 7 days' history for habit, [0:7] returns all but view date
+            #for day in sorted(item['history'][:-1]):
+            for index, day in enumerate(sorted(item['history'])[0:7]):
+                day_completion = item['history'][day]
+                # If we have history for this day...
+                if len(day_completion) > 0:
+
+                    # If missed show red bar, height of 1
+                    if day_completion[0] == 0:
+                        rgb = [0.9, 0.0, 0.0]
+                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT
+                        bar_h = 4
+
+                    # For all other results
+                    else:
+                        # If from preceding week, draw in grey
+                        if day_completion[1] < 0:
+                            rgb = [0.5, 0.5, 0.5]
+                        # Otherwise, based on completion status
+                        else:
+                            rgb = self.completion_pct_to_status_rgb_color(day_completion[0])
+
+                        bar_y = (100 - day_completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                        bar_h = day_completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+
+                # Draw a placeholder since we have no history for this day
+                else:
+                    rgb = self.completion_pct_to_status_rgb_color(-1)
+                    bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
+                    bar_h = 1
+
+                # Draw the bar
+                cr.set_source_rgb(rgb[0], rgb[1], rgb[2])
+                cr.rectangle(index * 7, bar_y + 4, 5, bar_h)
+                cr.fill()
+
+
+            # Turn pixmap back into pixbuf for Treeview column
+            pixbuf.get_from_drawable(pixmap, gtk.gdk.colormap_get_system(), \
+                    0, 0, 0, 4, -1, -1)
+
+            # Add the row to the list store
             self.day_habits_list_model.set(lstore_iter, \
                 TV_DAY_COL_NUM_ID, \
                     item['id'], \
                 TV_DAY_COL_NUM_ACTIVITY, \
-                    '<b>' + item['activity'] + '</b> ' + str(item['target_desc']) \
-                    + ' <i>' + item['by_when'] + '</i>', \
-                TV_DAY_COL_NUM_PIXBUF, \
-                    icon_pixbuf, \
+                    activity_markup, \
+                TV_DAY_COL_NUM_HISTICON, \
+                    pixbuf, \
+                TV_DAY_COL_NUM_CHECKBOX, \
+                    checkbox_pixbuf, \
                 TV_DAY_COL_NUM_PCT_COMPLETE, \
-                    item['pct_complete'], \
-                TV_DAY_COL_NUM_INTVL_CODE, \
-                    item['interval_code'] \
+                    item['pct_complete'] \
             )
 
 
-    def get_pixbuf_filename_for_status(self, pct_complete):
+    def get_pixbuf_filename_for_completion_status(self, pct_complete):
         if (pct_complete >= HISTORY_DONE_PCT):
             icon_filename = HISTORY_DONE_PIXBUF_FILE
         elif (pct_complete >= HISTORY_75_PCT):
@@ -1145,19 +1193,25 @@ habits for future dates can not be set.')
         treeview.append_column(column)
 
         # column for activity
-        renderer = gtk.CellRendererText()
-        renderer.set_property('wrap-mode', gtk.WRAP_WORD)
-        renderer.set_property('wrap-width', self.tv_day_activity_wrap_width)
-        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_ACTIVITY, renderer, markup=TV_DAY_COL_NUM_ACTIVITY)
+        rend = gtk.CellRendererText()
+        rend.set_property('wrap-mode', gtk.WRAP_WORD)
+        rend.set_property('wrap-width', self.tv_day_activity_wrap_width)
+        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_ACTIVITY, rend, markup=TV_DAY_COL_NUM_ACTIVITY)
         column.set_property('expand', True)
-        #column.tap_and_hold_setup(self.day_habits_list_menu)
+        treeview.append_column(column)
+
+        # column for history
+        rend = gtk.CellRendererPixbuf()
+        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_HISTICON, rend, pixbuf=TV_DAY_COL_NUM_HISTICON)
         treeview.append_column(column)
 
         # column for checkbox
+        # below was for single-clickable checkbox toggle
         #checkbox = CellRendererClickablePixbuf()
         #checkbox.connect('clicked', self.habit_toggled, treeview)
         checkbox = gtk.CellRendererPixbuf()
-        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_PIXBUF, checkbox, pixbuf=TV_DAY_COL_NUM_PIXBUF)
+        column = gtk.TreeViewColumn(TV_DAY_COL_NAME_CHECKBOX, checkbox, pixbuf=TV_DAY_COL_NUM_CHECKBOX)
+        # Make the column a little wider to make it easier to press on
         column.set_sizing(gtk.TREE_VIEW_COLUMN_FIXED)
         column.set_fixed_width(80)
         treeview.append_column(column)
@@ -1168,11 +1222,12 @@ habits for future dates can not be set.')
         treeview.append_column(column)
 
         # column for interval type
-        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_INTVL_CODE, gtk.CellRendererText(), text=TV_DAY_COL_NUM_INTVL_CODE)
+        #column = gtk.TreeViewColumn(TV_DAY_COL_NAME_PERIOD_CODE, gtk.CellRendererText(), text=TV_DAY_COL_NUM_PERIOD_CODE)
         #column.set_visible(False)
         #treeview.append_column(column)
 
 
+    # This function is no longer used
     def habit_toggled(self, widget, row_num, treeview):
         # Toggle habit completion status (fulfilled / unfulfilled / unknown)
         model = treeview.get_model()
@@ -1190,7 +1245,7 @@ habits for future dates can not be set.')
                 self.view_date_dt,
                 percent_complete
         )
-        model[iter][TV_DAY_COL_NUM_PIXBUF] = self.get_pixbuf_filename_for_status (percent_complete)
+        model[iter][TV_DAY_COL_NUM_CHECKBOX] = self.get_pixbuf_filename_for_completion_status (percent_complete)
         model[iter][TV_DAY_COL_NUM_PCT_COMPLETE] = percent_complete
         # Maybe set timeout to redraw the habit list a few seconds later?
 
@@ -1217,14 +1272,14 @@ habits for future dates can not be set.')
         self.populate_day_habits_list_ls(self.day_habits_list)
         today = datetime.date.today()
 
-        # Hide the pause menu if not viewing the current day (TODO: menu setup func?)
-        if self.view_date_dt != today:
-            self.h_ui_manager.get_widget('/tvdayactivitycmenu/pausemenu/').hide()
+        # If viewing the current day, show the pause menu and timer option
+        if self.view_date_dt == today:
+            self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
         else:
-            self.h_ui_manager.get_widget('/tvdayactivitycmenu/pausemenu/').show()
+            self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True)
 
         # Hide checkbox column for dates in the future
-        checkbox_col = self.day_habits_list_tv.get_column(TV_DAY_COL_NUM_PIXBUF)
+        checkbox_col = self.day_habits_list_tv.get_column(TV_DAY_COL_NUM_CHECKBOX)
         if self.view_date_dt <= today:
             checkbox_col.set_visible(True)
         else:
@@ -1296,9 +1351,20 @@ habits for future dates can not be set.')
 
 
     def set_habit_percent_complete (self, habit_id, view_date_dt, percent_complete):
-        habitjewel_utils.set_habit_pct_complete (conn,
-                habit_id, view_date_dt, percent_complete
-            )
+        self.db.set_habit_pct_complete (habit_id, view_date_dt, percent_complete)
+
+
+    def on_status_cmenu_open_timer_selected (self, menu_item):
+        if not self.touched_habit:
+            return
+        else:
+            self.timer_habit = self.touched_habit
+            # Initialise the timer window
+            self.timer_win = self.get_stackable_window(_(WIN_TITLE_TIMER))
+            self.timer_container = self.get_timer_container()
+            self.timer_win.add(self.timer_container)
+            self.timer_win.connect('destroy', self.on_timer_window_destroy)
+            self.timer_win.show_all()
 
 
     def on_status_cmenu_pct_selected (self, pct_complete):
@@ -1337,26 +1403,194 @@ habits for future dates can not be set.')
 
 
 
+    ##################################
+    # Countdown timer window functions
+    ##################################
+
+
+    def get_timer_container(self):
+        habit = self.timer_habit
+        activity_tbl = gtk.Table(2, 2, False)
+        activity_tbl.set_row_spacings(5)
+        activity_tbl.set_col_spacings(5)
+
+        a_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        a_btn.set_label(_('Timer for:'))
+
+        a_entry = gtk.Label(habit['activity'])
+        a_entry.set_line_wrap(True)
+        activity_tbl.attach(a_btn, 0, 1, 0, 1)
+        activity_tbl.attach(a_entry, 1, 2, 0, 1, gtk.EXPAND|gtk.FILL)
+
+        t_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        t_btn.set_label(_('Target:'))
+
+        if habit['pct_complete'] > 0:
+            status = str(100 - habit['pct_complete']) + '% ' + _('remaining')
+        else:
+            status = _('not started')
+        t_text = habit['target_desc'] + ' (' + status + ')'
+        t_entry = gtk.Label(t_text)
+        t_entry.set_line_wrap(True)
+        activity_tbl.attach(t_btn, 0, 1, 1, 2)
+        activity_tbl.attach(t_entry, 1, 2, 1, 2, gtk.EXPAND|gtk.FILL)
+
+        if self.last_orientation == LANDSCAPE:
+            box_controls = gtk.HBox(False)
+        else:
+            box_controls = gtk.VBox(True)
+
+        box_controls.set_spacing(30)
+
+        # When timer is running, display
+        if not 'running' in self.timer and not 'remain_secs' in self.timer:
+            # Set slider initial value (current remaining time in mins if existing timer)
+            # Calculate remaining time based on percent already complete and target
+            remain_mins = (100 - habit['pct_complete']) * \
+                    (habit['target'] * habit['to_minutes']) * 0.01
+            self.timer['remain_secs'] = remain_mins * 60
+
+        else:
+            remain_mins = self.timer['remain_secs'] * 0.01666666
+
+
+        self.timer_adj = gtk.Adjustment(remain_mins, 0, habit['target'] * habit['to_minutes'] * 2, 0, 1)
+        scale = gtk.HScale(self.timer_adj)
+        # Disable decimal places in horizontal scale
+        scale.set_digits(0)
+        scale.connect('value_changed', self.on_timer_time_changed)
+
+        vbox_scale = gtk.VBox(True)
+        scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
+        vbox_scale.pack_start(scale_lbl, True, True) 
+        vbox_scale.pack_start(scale, True, True)
+
+        box_controls.pack_start(vbox_scale, True, True) 
+
+        self.timer_start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
+                hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
+        self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
+        self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
+        self.timer_start_stop_btn.set_size_request(width=300, height=150)
+        self.timer_start_stop_btn.connect('clicked', self.on_timer_start_stop_btn_click)
+
+        box_controls.pack_start(self.timer_start_stop_btn, True, True)
+
+        vbox = gtk.VBox()
+        vbox.pack_start(activity_tbl, True, True)
+        vbox.pack_start(box_controls, True, False)
+
+        return vbox
+
+
+    def set_timer_adjustment_value(self, value):
+        self.timer_adj.set_value(value) 
+
+
+    def get_timer_start_stop_btn_hbox(self):
+        # HBox for start/stop timer button
+        hbox = gtk.HBox()
+        if 'running' in self.timer:
+            icon_filename = TIMER_STOP_PIXBUF_FILE
+            label_text = _('Stop Timer')
+        else:
+            icon_filename = TIMER_START_PIXBUF_FILE
+            label_text = _('Start Timer')
+        pixbuf = gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
+        img = gtk.image_new_from_pixbuf(pixbuf)
+        label = gtk.Label(label_text)
+        hbox.pack_start(img)
+        hbox.pack_start(label)
+        return hbox
+
+
+    def set_timer_countdown_time(self, seconds):
+        self.timer['remain_secs'] = seconds
+
+
+    def on_timer_start_stop_btn_click(self, win):
+        self.on_timer_start_or_stop()
+
+
+    def on_timer_start_or_stop(self):
+        if 'running' in self.timer:
+            self.timer.pop('running', None)
+            self.timer.pop('remain_secs', None)
+            self.show_info_banner(self.top_win, _('Timer Stopped'))
+        else:
+            self.timer['running'] = True
+            gobject.timeout_add_seconds(TIMER_TIMEOUT_INTERVAL_SECS, self.timer_countdown)
+            self.show_info_banner(self.top_win, _('Timer Started'))
+
+        # Why doesn't this work? Start/Stop button doesn't redraw when clicked
+        self.timer_start_stop_btn.remove(self.timer_start_stop_btn_hbox)
+        self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
+        self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
+        self.timer_win.show_all()
+
+
+    def on_timer_time_changed(self, widget):
+        if not 'running' in self.timer:
+            self.set_timer_countdown_time(self.timer_adj.get_value() * 60)
+        else:
+            self.timer_adj.set_value(self.timer['remain_secs'] * 0.01666666)
+
+
+    def timer_countdown(self):
+        if not 'running' in self.timer:
+            return False
+
+        # Timer is running but still has time to go
+        elif self.timer['remain_secs'] > TIMER_TIMEOUT_INTERVAL_SECS:
+            self.timer['remain_secs'] -= TIMER_TIMEOUT_INTERVAL_SECS
+            new_min = abs(self.timer['remain_secs'] % 60) 
+            if new_min == 0 or new_min >= 60 - TIMER_TIMEOUT_INTERVAL_SECS:
+                self.set_timer_adjustment_value(self.timer['remain_secs'] * 0.01666666)
+            return True
+
+        # Timer is running and time's up!
+        else:
+            self.set_timer_adjustment_value(0)
+            self.on_timer_start_or_stop()
+            pl = gst.element_factory_make("playbin", "player")
+            pl.set_property('uri','file:///usr/share/sounds/ui-wake_up_tune.wav')
+            pl.set_state(gst.STATE_PLAYING)
+            return False
+
+
+    def on_timer_window_destroy(self, win):
+        # Clear data structures and widgets
+        if 'running' in self.timer:
+            self.show_info_banner(self.top_win, _('Timer Cleared'))
+            self.timer = {}
+
+
+
+
     ################################
     # Habit editing window functions
     ################################
 
 
     def habit_edit_window(self, habit):
-
         # Get categories
-        categories = habitjewel_utils.get_categories_list(conn)
+        categories = self.db.get_categories_list()
 
         self.edit_win = hildon.StackableWindow()
         vbox = gtk.VBox()
 
         if not habit:
-            self.editing_habit = {'interval_code':'DAY', \
+            self.editing_habit = { \
                     'activity':'Describe activity here', \
-                    'target':'10', \
-                    'measure_desc':'minute', \
-                    'limit_week_day_nums':'0,1,2,3,4,5,6', \
-                    'interval':'', \
+                    'weekly_quota':'7', \
+                    'measure_desc':NULL_MEASURE_DESC, \
+                    'unit':'', \
+                    'plural':'', \
+                    'null_measure':'1', \
+                    'priority':'2', \
+                    'target':'1', \
                     'paused_until_date':'', \
                     'deleted_date':'' \
                     }
@@ -1368,17 +1602,48 @@ habits for future dates can not be set.')
         # Draw new/edit habit form 
         # Habit activity
         a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        a_entry.set_input_mode(gtk.HILDON_GTK_INPUT_MODE_ALPHA | gtk.HILDON_GTK_INPUT_MODE_NUMERIC)
         # set_placeholder doesn't work for some reason (displays only briefly)
         # a_entry.set_placeholder('Test placeholder')
+        a_entry.set_max_length(50)
         a_entry.set_text(self.editing_habit['activity'])
         a_entry.set_position(len(self.editing_habit['activity']))
         a_entry.connect('changed', self.on_activity_changed)
+
+        # Preview label
+        preview_info = self.get_edit_habit_preview_label_text(self.editing_habit)
+        preview_lbl = gtk.Label(preview_info)
 
         # Settings table
         settings_tbl = gtk.Table(2, 2, True)
         settings_tbl.set_row_spacings(5)
         settings_tbl.set_col_spacings(5)
+
+        # Habit weekly quota
+        f_selector = self.create_weekly_quota_selector(self.editing_habit['weekly_quota'])
+        f_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        f_picker.set_title(_('Weekly Quota'))
+        f_picker.set_selector(f_selector)
+        settings_tbl.attach(f_picker, 0, 1, 0, 1)
+        f_selector.connect('changed', self.on_edit_habit_weekly_quota_changed, preview_lbl)
+
+        # Habit measure
+        m_selector = self.create_measures_selector(self.editing_habit['measure_desc'])
+        m_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        m_picker.set_title(_('Measure'))
+        m_picker.set_selector(m_selector)
+        settings_tbl.attach(m_picker, 1, 2, 0, 1)
+        m_selector.connect('changed', self.on_edit_habit_measure_changed, preview_lbl)
+
+        # Habit priority
+        p_selector = self.create_priority_selector(self.editing_habit['priority'])
+        p_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
+                hildon.BUTTON_ARRANGEMENT_VERTICAL)
+        p_picker.set_title(_('Priority'))
+        p_picker.set_selector(p_selector)
+        settings_tbl.attach(p_picker, 0, 1, 1, 2)
+        p_selector.connect('changed', self.on_edit_habit_priority_changed, preview_lbl)
 
         # Habit target
         # (change to SpinButton ?)
@@ -1392,45 +1657,14 @@ habits for future dates can not be set.')
                 hildon.BUTTON_ARRANGEMENT_VERTICAL)
         t_picker.set_title(_('Target'))
         t_picker.set_selector(t_selector)
-        settings_tbl.attach(t_picker, 0, 1, 0, 1)
-        t_selector.connect('changed', self.on_edit_habit_target_changed)
+        settings_tbl.attach(t_picker, 1, 2, 1, 2)
+        t_selector.connect('changed', self.on_edit_habit_target_changed, preview_lbl)
+        # Expose target picker widget as class variable
+        self.edit_habit_target_picker = t_picker
 
-        #t_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
-        #t_entry.set_text(str(habit['target']))
-        #settings_tbl.attach(l, 0, 1, 1, 2, gtk.FILL)
-        #settings_tbl.attach(t_entry, 1, 2, 1, 2)
-
-        # Habit measure
-        m_selector = self.create_measures_selector(self.editing_habit['measure_desc'])
-        m_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
-                hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        m_picker.set_title(_('Measure'))
-        m_picker.set_selector(m_selector)
-        #settings_tbl.attach(m_picker, 1, 2, 0, 1, gtk.FILL)
-        settings_tbl.attach(m_picker, 1, 2, 0, 1)
-        m_selector.connect('changed', self.on_edit_habit_measure_changed)
-
-        # Habit interval type
-        it_selector = self.create_interval_type_selector(self.editing_habit['interval_code'])
-        it_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
-                hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        it_picker.set_title(_('Interval Type'))
-        it_picker.set_selector(it_selector)
-        settings_tbl.attach(it_picker, 0, 1, 1, 2)
-        it_selector.connect('changed', self.on_edit_habit_interval_type_changed)
-
-        # Habit interval
-        int_picker = hildon.PickerButton(gtk.HILDON_SIZE_AUTO,
-                hildon.BUTTON_ARRANGEMENT_VERTICAL)
-
-        int_selector, title = self.get_edit_habit_interval_selector()
-        int_picker.set_title(title)
-        int_picker.set_selector(int_selector)
-        settings_tbl.attach(int_picker, 1, 2, 1, 2)
-
-        # Info label
-        habit_info = self.get_edit_habit_info_label_text(self.editing_habit)
-        info_lbl = gtk.Label(habit_info)
+        # Status label
+        habit_status_text = self.get_edit_habit_status_label_text(self.editing_habit)
+        status_lbl = gtk.Label(habit_status_text)
 
         # Button bar table
         btn_tbl = gtk.Table(1, 3, True)
@@ -1443,7 +1677,7 @@ habits for future dates can not be set.')
             delete_btn.set_label(_('Delete'))
         else:
             delete_btn.set_label(_('Undelete'))
-        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, info_lbl)
+        delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, status_lbl)
         btn_tbl.attach(delete_btn, 0, 1, 0, 1)
 
         # Pause/unpause button
@@ -1452,32 +1686,68 @@ habits for future dates can not be set.')
             pause_btn.set_label(_('Pause'))
         else:
             pause_btn.set_label(_('Unpause'))
-        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, info_lbl)
+        pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, status_lbl)
         btn_tbl.attach(pause_btn, 1, 2, 0, 1)
 
         # Save button
         save_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         save_btn.set_label(_('Save'))
-        save_btn.connect('clicked', self.on_edit_habit_save_btn_click) #, self.edit_win)
+        save_btn.connect('clicked', self.on_edit_habit_save_btn_click)
         btn_tbl.attach(save_btn, 2, 3, 0, 1)
 
         # Render
-        vbox.pack_start(a_entry, False, True, 3)
-        vbox.pack_start(settings_tbl, True, True, 8)
-        vbox.pack_start(info_lbl, True, False, 8)
-        vbox.pack_start(btn_tbl, True, True, 3)
+        vbox.pack_start(a_entry, False, True, 0)
+        vbox.pack_start(preview_lbl, True, False, 0)
+        vbox.pack_start(settings_tbl, True, True, 0)
+        vbox.pack_start(status_lbl, True, False, 0)
+        vbox.pack_start(btn_tbl, True, True, 0)
 
         self.edit_win.add(vbox)
         self.edit_win.set_title(win_title)
         self.edit_win.connect('destroy', self.on_edit_habit_window_destroy)
         self.edit_win.show_all()
 
+        # Hide target picker if non-measurable habit
+        self.set_target_picker_visibility()
 
-    def get_edit_habit_info_label_text(self, habit):
-        if habit['deleted_date']:
+
+    def set_target_picker_visibility(self):
+        if self.db.is_null_measure(self.editing_habit['measure_desc']):
+            self.edit_habit_target_picker.hide();
+        else:
+            self.edit_habit_target_picker.show();
+
+
+    def get_edit_habit_preview_label_text(self, habit):
+        preview = ''
+        if not 'null_measure' in habit or \
+                'null_measure' in habit and habit['null_measure'] != '1':
+
+            if 'target' in habit and habit['target'] and \
+                    'measure_desc' in habit and habit['measure_desc']:
+                if habit['target'] == '1':
+                    measure = habit['unit']
+                else:
+                    measure = habit['plural']
+                preview += str(habit['target']) + ' ' + measure
+
+        if preview:
+            preview += ', '
+
+        if 'weekly_quota' in habit and habit['weekly_quota']:
+            preview += str(habit['weekly_quota']) + ' ' + _('times per week')
+
+        if 'priority' in habit and habit['priority']:
+            preview += ' (' + _('priority') + ' ' + str(habit['priority']) + ')'
+
+        return preview
+
+
+    def get_edit_habit_status_label_text(self, habit):
+        if 'deleted_date' in habit and habit['deleted_date']:
             habit_info = _('Deleted')
             habit_info += ' ' + self.db_date_to_display_date(habit['deleted_date'])
-        elif habit['paused_until_date']:
+        elif 'paused_until_date' in habit and habit['paused_until_date']:
             habit_info = _('Paused until')
             habit_info += ' '
             if self.db_date_to_dt(habit['paused_until_date']) == self.get_today_dt():
@@ -1485,17 +1755,79 @@ habits for future dates can not be set.')
             else:
                 habit_info += self.db_date_to_display_date(habit['paused_until_date'])
         else:
-            habit_info = _('Active')
-        habit_info += ' ('
-        habit_info += _('Created on')
-        habit_info += ' '
-        habit_info += self.db_date_to_display_date(habit['created_date'])
-        habit_info += ')'
+            if 'created_date' in habit and habit['created_date']:
+                habit_info = _('Active')
+                habit_info += ' ('
+                habit_info += _('Created on')
+                habit_info += ' '
+                habit_info += self.db_date_to_display_date(habit['created_date'])
+                habit_info += ')'
+            else:
+                habit_info = _('Define habit')
         return habit_info 
 
-        
+
     def on_activity_changed(self, widget):
         self.editing_habit['activity'] = widget.get_text()
+
+
+    def get_edit_habit_weekly_quota_selector(self):
+        # Selection of repeat weekly quota
+        selector = self.create_weekly_quota_selector(self.editing_habit['weekly_quota'])
+        title = _('Weekly Quota')
+        selector.connect('changed', self.on_edit_habit_weekly_quota_changed)
+        return selector
+
+
+    def create_weekly_quota_selector(self, selected_weekly_quota = None):
+        selector = hildon.TouchSelector(text = True)
+        for i in range(8):
+            selector.append_text(str(i))
+            if str(i) == str(selected_weekly_quota):
+                selector.set_active(0, i)
+        return selector
+
+
+    def create_measures_selector(self, selected_measure = None):
+        measures = self.db.get_measures_list()
+        selector = hildon.TouchSelector(text = True)
+        index = 0
+        for measure in measures:
+            selector.append_text(measure['desc'])
+            if str(measure['desc']) == str(selected_measure):
+                selector.set_active(0, index)
+            index += 1
+        return selector
+
+
+    def on_edit_habit_measure_changed(self, widget, user_data, preview_lbl):
+        self.editing_habit['measure_desc'] = widget.get_current_text()
+        self.set_target_picker_visibility()
+        if self.editing_habit['measure_desc'] != NULL_MEASURE_DESC:
+            self.editing_habit['null_measure'] = '0'
+            measure_id, unit, plural = \
+                    self.db.get_measure(self.editing_habit['measure_desc'])
+            self.editing_habit['unit'] = unit
+            self.editing_habit['plural'] = plural
+        else:
+            self.editing_habit['null_measure'] = '1'
+            self.editing_habit['unit'] = ''
+            self.editing_habit['plural'] = ''
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
+
+
+    def create_priority_selector(self, selected_priority = None):
+        selector = hildon.TouchSelector(text = True)
+        for i in range(1,4):
+            selector.append_text(str(i))
+            if str(i) == str(selected_priority):
+                selector.set_active(0, i - 1)
+        return selector
+
+
+    def on_edit_habit_priority_changed(self, widget, user_data, preview_lbl):
+        self.editing_habit['priority'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
     def create_target_selector(self, selected_target = None):
@@ -1507,119 +1839,45 @@ habits for future dates can not be set.')
         return selector
 
 
-    def on_edit_habit_target_changed(self, widget, user_data):
+    def on_edit_habit_target_changed(self, widget, user_data, preview_lbl):
         self.editing_habit['target'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
-    def create_measures_selector(self, selected_measure = None):
-        measures = habitjewel_utils.get_measures_list(conn)
-        selector = hildon.TouchSelector(text = True)
-        index = 0
-        for measure in measures:
-            selector.append_text(measure['desc'])
-            if str(measure['desc']) == str(selected_measure):
-                selector.set_active(0, index)
-            index += 1
-        return selector
+    def on_edit_habit_weekly_quota_changed(self, widget, user_data, preview_lbl):
+        self.editing_habit['weekly_quota'] = widget.get_current_text()
+        preview_lbl.set_text(self.get_edit_habit_preview_label_text(self.editing_habit))
 
 
-    def on_edit_habit_measure_changed(self, widget, user_data):
-        self.editing_habit['measure_desc'] = widget.get_current_text()
-
-
-    def create_interval_type_selector(self, selected_interval_code = None):
-        interval_types = habitjewel_utils.get_interval_types_list(conn)
-        selector = hildon.TouchSelector(text = True)
-        index = 0
-        for interval_type in interval_types:
-            selector.append_text(interval_type['desc'])
-            if str(interval_type['code']) == str(selected_interval_code):
-                selector.set_active(0, index)
-            index += 1
-        return selector
-
-
-    def on_edit_habit_interval_type_changed(self, widget, user_data):
-        self.editing_habit['interval_code'] = widget.get_current_text()
-
-
-    def get_edit_habit_interval_selector(self):
-        if self.editing_habit['interval_code'] == 'DAY':
-            # Allow limiting daily habit to specific days of the week
-            int_selector = self.create_limit_week_days_selector(self.editing_habit['limit_week_day_nums'])
-            title = _('Days of Week')
-            int_selector.connect('changed', self.on_edit_habit_limit_week_days_changed)
-
-        else:
-            # Selection of repeat interval for weekly/monthly habits
-            int_selector = self.create_interval_selector(self.editing_habit['interval'])
-            title = _('Interval')
-            int_selector.connect('changed', self.on_edit_habit_interval_changed)
-
-        return (int_selector, title)
-
-
-    def create_interval_selector(self, selected_interval = None):
-        selector = hildon.TouchSelector(text = True)
-        for i in range(10):
-            selector.append_text(str(i))
-            if str(i) == str(selected_interval):
-                selector.set_active(0, i)
-        return selector
-
-
-    def on_edit_habit_interval_changed(self, widget, user_data):
-        self.editing_habit['interval'] = widget.get_current_text()
-
-
-    def create_limit_week_days_selector(self, selected_days_of_week = None):
-        selector = hildon.TouchSelector(text = True)
-        selector.set_column_selection_mode(hildon.TOUCH_SELECTOR_SELECTION_MODE_MULTIPLE)
-        for i in range(7):
-            selector.append_text(calendar.day_abbr[i])
-            if not selected_days_of_week or selected_days_of_week.find(str(i)) != -1:
-                selector.select_iter(0, selector.get_model(0).get_iter(i), True)
-        return selector
-
-
-    def on_edit_habit_limit_week_days_changed(self, widget, user_data):
-        widget_text = widget.get_current_text()
-        selected_days = []
-        for i in range(7):
-            if widget_text.find(calendar.day_abbr[i]) != -1:
-                selected_days.append(str(i))
-        self.editing_habit['limit_week_day_nums'] = ','.join(selected_days)
-
-
-    def on_edit_habit_delete_btn_click(self, widget, info_lbl):
+    def on_edit_habit_delete_btn_click(self, widget, status_lbl):
         if self.editing_habit['deleted_date']:
             widget.set_label(_('Delete'))
             self.editing_habit['deleted_date'] = None
         else:
             widget.set_label(_('Undelete'))
             self.editing_habit['deleted_date'] = self.dt_to_db_date(self.get_today_dt())
-        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+        status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_cal_date_selected(self, cal, st_win, widget, info_lbl):
+    def on_edit_habit_pause_cal_date_selected(self, cal, st_win, widget, status_lbl):
         paused_until_date_dt = self.get_gtk_cal_date_to_dt(cal)
         st_win.destroy()
         widget.set_label(_('Unpause'))
         self.editing_habit['paused_until_date'] = self.dt_to_db_date(paused_until_date_dt)
-        info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+        status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
 
 
-    def on_edit_habit_pause_btn_click(self, widget, info_lbl):
+    def on_edit_habit_pause_btn_click(self, widget, status_lbl):
         if self.editing_habit['paused_until_date']:
             widget.set_label(_('Pause'))
             self.editing_habit['paused_until_date'] = None
-            info_lbl.set_text(self.get_edit_habit_info_label_text(self.editing_habit))
+            status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))
         else:
             # parameters are date for calendar and whether to hide the 'Today' button
             st_win = self.get_general_calendar_window(None, True)
             st_win.set_title(_(WIN_TITLE_PAUSE_UNTIL_DATE))
             st_win.show_all()
-            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win, widget, info_lbl)
+            self.cal.connect('day_selected', self.on_edit_habit_pause_cal_date_selected, st_win, widget, status_lbl)
 
 
     def on_edit_habit_save_btn_click(self, widget):
@@ -1628,22 +1886,31 @@ habits for future dates can not be set.')
         valid = None
 
         if self.editing_habit['activity'] and \
-                self.editing_habit['target'] and \
                 self.editing_habit['measure_desc'] and \
-                self.editing_habit['interval_code']:
+                self.editing_habit['priority']:
 
-            if self.editing_habit['interval_code'] == 'DAY':
+            # If non-measurable we're valid...
+            if self.editing_habit['null_measure'] == 1:
                 valid = True
-            elif self.editing_habit['interval']:
-                valid = True
+
+            # ...otherwise check we have a target
+            else:
+                if 'target' in self.editing_habit and self.editing_habit['target']:
+                    valid = True
+                else:
+                    valid = False
 
         if valid:
-            habitjewel_utils.save_habit(conn, self.editing_habit)
+            self.db.save_habit(self.editing_habit)
             self.show_info_banner(self.top_win, 'Habit "' + self.editing_habit['activity'] + '" saved')
             self.edit_win.destroy()
             self.redraw_day_habits_list()
+            active_window_title = self.get_active_window_title()
+            # Only try to redraw master habits list if it's the active window
+            if hasattr(self, 'master_habits_list_model'):
+                self.redraw_master_habits_list()
         else:
-            self.show_info_banner (widget, 'Please ensure all fields are completed')
+            self.show_info_banner (widget, _('Please ensure all fields are completed'))
 
 
     def on_edit_habit_window_destroy(self, win):
@@ -1651,15 +1918,15 @@ habits for future dates can not be set.')
         self.editing_habit = None
 
 
-
-
-
 ###################
 # end of MainWindow 
 ###################
 
 
-if __name__ == "__main__":
+
+
+
+if __name__ == '__main__':
     MainWindow = MainWindow()
     #gtk.gdk.threads_enter()
     gtk.main()
