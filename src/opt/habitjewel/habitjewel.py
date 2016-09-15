@@ -1427,11 +1427,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
         t_btn.set_label(_('Target:'))
 
+        t_text = habit['target_desc']
         if habit['pct_complete'] > 0:
-            status = str(100 - habit['pct_complete']) + '% ' + _('remaining')
-        else:
-            status = _('not started')
-        t_text = habit['target_desc'] + ' (' + status + ')'
+            t_text += ' (' + str(100 - habit['pct_complete']) + '% ' + _('remaining') + ')'
         t_entry = gtk.Label(t_text)
         t_entry.set_line_wrap(True)
         activity_tbl.attach(t_btn, 0, 1, 1, 2)
