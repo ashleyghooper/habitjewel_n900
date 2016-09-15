@@ -29,7 +29,7 @@ do
     time=$(date +%H:%M:%S)
     if [ $difference -gt 2 ]; then
         last_event_epoch=${event_epoch}
-        scp $affected_file $remote_host:$remote_project_path/${dir}
+        rsync --bwlimit=30 $affected_file $remote_host:$remote_project_path/${dir}
         ssh -f $remote_host "source /etc/osso-af-init/af-defines.sh && /bin/sh $remote_project_path/auto_restart.sh"
         echo "At ${time} on ${date}, file ${file} was copied to $remote_host"
     else

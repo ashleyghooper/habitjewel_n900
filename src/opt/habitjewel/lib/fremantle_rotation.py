@@ -24,8 +24,6 @@ import dbus.glib
 import hildon
 import osso
 
-
-
 class FremantleRotation(object):
     """thp's screen rotation for Maemo 5
 
@@ -41,7 +39,7 @@ class FremantleRotation(object):
     AUTOMATIC, NEVER, ALWAYS = range(3)
 
     # Human-readable captions for the above constants
-    MODE_CAPTIONS = ('Automatic', 'Landscape', 'Portrait')
+    MODE_CAPTIONS = (('Automatic'), ('Landscape'), ('Portrait'))
 
     # Privately-used constants
     _PORTRAIT, _LANDSCAPE = ('portrait', 'landscape')
@@ -65,8 +63,9 @@ class FremantleRotation(object):
         self._main_window = main_window
         self._stack = hildon.WindowStack.get_default()
         self._mode = -1
-        self._last_dbus_orientation = None
-        app_id = '-'.join((app_name, self.__class__.__name__))
+        #Khertan add s for initial position
+        self._last_dbus_orientation = self.get_current_orientation()
+        app_id = '-'.join((app_name, str(self.__class__.__name__)))
         self._osso_context = osso.Context(app_id, version, False)
         program = hildon.Program.get_instance()
         program.connect('notify::is-topmost', self._on_topmost_changed)
@@ -74,9 +73,20 @@ class FremantleRotation(object):
         system_bus.add_signal_receiver(self._on_orientation_signal, \
                 signal_name='sig_device_orientation_ind', \
                 dbus_interface='com.nokia.mce.signal', \
-                path='/com/nokia/mce/signal')
+                path='/com/nokia/mce/signal')        
         self.set_mode(mode)
 
+    #Khertan add s for initial position
+    def get_current_orientation(self):
+        f = open("/sys/class/i2c-adapter/i2c-3/3-001d/coord", 'r' )
+        x,y,z = [int(w) for w in f.readline().split()]
+        f.close()
+        
+        if abs(x)<500: 
+          return self._LANDSCAPE
+        else:
+          return self._PORTRAIT
+          
     def get_mode(self):
         """Get the currently-set rotation mode
 
@@ -99,12 +109,14 @@ class FremantleRotation(object):
                 self._last_dbus_orientation = self._orientation
                 # Tell MCE that we don't need the accelerometer anymore
                 self._send_mce_request(self._DISABLE_ACCEL)
+                
 
             if new_mode == self.NEVER:
                 self._orientation_changed(self._LANDSCAPE)
             elif new_mode == self.ALWAYS:
                 self._orientation_changed(self._PORTRAIT)
             elif new_mode == self.AUTOMATIC:
+                
                 # Restore the last-known "automatic" orientation
                 self._orientation_changed(self._last_dbus_orientation)
                 # Tell MCE that we need the accelerometer again
