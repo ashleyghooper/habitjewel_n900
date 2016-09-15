@@ -3,6 +3,10 @@
 
 ### Changed
 
+## [0.7.3] - 2016-09-15
+### Changed
+- Changed wording of Target time label on timer page to be less ambiguous
+
 ## [0.7.2] - 2016-09-15
 ### Changed
 - Fixed crash when exiting timer that is running
