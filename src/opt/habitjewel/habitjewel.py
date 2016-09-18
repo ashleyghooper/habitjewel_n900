@@ -1522,7 +1522,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             gobject.timeout_add_seconds(TIMER_TIMEOUT_INTERVAL_SECS, self.timer_countdown)
             self.show_info_banner(self.top_win, _('Timer Started'))
 
-        # Why doesn't this work? Start/Stop button doesn't redraw when clicked
+        # Redraw the Start/Stop Timer button
         self.timer_start_stop_btn.remove(self.timer_start_stop_btn_hbox)
         self.timer_start_stop_btn_hbox = self.get_timer_start_stop_btn_hbox()
         self.timer_start_stop_btn.add(self.timer_start_stop_btn_hbox)
@@ -1537,7 +1537,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def timer_countdown(self):
-        if not 'running' in self.timer:
+        if not self.timer or not 'running' in self.timer:
             return False
 
         # Timer is running but still has time to go
@@ -1562,7 +1562,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         # Clear data structures and widgets
         if 'running' in self.timer:
             self.show_info_banner(self.top_win, _('Timer Cleared'))
-            self.timer = {}
+
+        # Clear the timer so that idle timeouts terminate immediately on next cycle
+        self.timer = {}
 
 
 
