@@ -3,6 +3,14 @@
 
 ### Changed
 
+## [0.7.5] - 2016-09-19
+### Changed
+- Ditched gstreamer for calling aplay via os.system() to try to fix battery drain issue
+
+## [0.7.4] - 2016-09-18
+### Changed
+- Tweaks to timer to address potential battery drain issue
+
 ## [0.7.3] - 2016-09-15
 ### Changed
 - Changed wording of Target time label on timer page to be less ambiguous
