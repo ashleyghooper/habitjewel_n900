@@ -19,7 +19,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.7.5' # (major.minor.sub-minor)
+VERSION = '0.8.0' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 # See CHANGELOG.md for detailed change history
@@ -39,10 +39,6 @@ import sqlite3
 import sys
 import time
 
-# GStreamer for playing audio
-#import pygst
-#pygst.require('0.10')
-#import gst
 
 # Get path to determine library and static resource locations
 running_path = sys.path[0]
@@ -1553,9 +1549,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             self.set_timer_adjustment_value(0)
             self.on_timer_start_or_stop()
             os.system('aplay /usr/share/sounds/ui-wake_up_tune.wav')
-            #pl = gst.element_factory_make("playbin2", "player")
-            #pl.set_property('uri','file:///usr/share/sounds/ui-wake_up_tune.wav')
-            #pl.set_state(gst.STATE_PLAYING)
             return False
 
 

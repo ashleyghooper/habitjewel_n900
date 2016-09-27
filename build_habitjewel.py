@@ -21,7 +21,7 @@ if __name__ == "__main__":
     p.description="Record and track your progress in achieving your daily habits."
     p.author="Ashley Hooper"
     p.mail="ashleyghooper@gmail.com"
-    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader, python-gst0.10"
+    p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader"
     # Edit this based on your import statements (for example, you probably will not need pygame)
     p.section="user/office"
     # When editing the .section, make sure to use [[Packaging#Sections|an allowed section]] - otherwise the autobuilder will give a warning.
@@ -46,12 +46,12 @@ chmod 755 /opt/habitjewel/habitjewel.py
     #    """ #Set here your pre install script
     #  p.preremove="""#!/bin/sh
     #  chmod +x /usr/bin/mclock.py""" #Set here your pre remove script
-    version = "0.7.5"          #Version of your software, for example "1.2.0" or "0.8.2"
+    version = "0.8.0"          #Version of your software, for example "1.2.0" or "0.8.2"
     build = "1"                #Build number, for example "1" for the first build of this version of your software. Increment for later re-builds of the same version of your software.
                                 #Text with changelog information to be displayed in the package "Details" tab of the Maemo Application Manager
-    changeloginformation = """## [0.7.5] - 2016-09-19
+    changeloginformation = """## [0.8.0] - 2016-09-26
 ### Changed
-- Ditched gstreamer for calling aplay via os.system() to try to fix battery drain issue
+- Fixed schema upgrade bug that caused habits table to be recreated without primary key
 """
     dir_name = "src"            #Name of the subfolder containing your package source files (for example, usr\share\icons\hicolor\scalable\myappicon.svg, usr\lib\myapp\somelib.py). We suggest to leave it named src in all projects and will refer to that in the wiki article on maemo.org
     #Thanks to DareTheHair from talk.maemo.org for this snippet that recursively builds the file list.

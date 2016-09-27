@@ -449,9 +449,9 @@ class HabitJewelDb:
                 VALUES (?, ?, 0, 'OK', CURRENT_DATE)
             """, [major, minor])
         self.conn.commit()
-    
-    
-    def check_and_upgrade_schema(self, db_file, code_schema_ver):
+
+
+    def get_current_schema_version(self):
         # Get current schema version
         cursor = self.conn.execute(
             """
@@ -461,11 +461,17 @@ class HabitJewelDb:
              ORDER BY major DESC
                    , minor DESC
             """)
-    
+
         # Get the highest version only
         row = cursor.fetchone()
         db_schema_ver = str(row[0]) + '.' + str(row[1])
+        cursor.close()
+        return db_schema_ver
+
+
+    def check_and_upgrade_schema(self, db_file, code_schema_ver):
         
+        db_schema_ver = self.get_current_schema_version()
         if db_schema_ver == code_schema_ver:
             print 'Database schema version (' + db_schema_ver + ') is up to date for this version'
             return
@@ -473,13 +479,17 @@ class HabitJewelDb:
         else:
             # Apply all applicable schema upgrades
             if db_schema_ver == '0.5' or db_schema_ver == '0.4':
-                cursor.close()
                 self.upgrade_schema_0_4_to_0_6(db_file, db_schema_ver, code_schema_ver)
+                db_schema_ver = self.get_current_schema_version()
 
             elif db_schema_ver == '0.6':
-                cursor.close()
                 self.upgrade_schema_0_6_to_0_7(db_file, db_schema_ver, code_schema_ver)
-    
+                db_schema_ver = self.get_current_schema_version()
+
+            elif db_schema_ver == '0.7':
+                self.upgrade_schema_0_7_to_0_8(db_file, db_schema_ver, code_schema_ver)
+                db_schema_ver = self.get_current_schema_version()
+
             else:
                 print 'No upgrade method available for Schema version ' + db_schema_ver
                 return False
@@ -493,10 +503,10 @@ class HabitJewelDb:
 
     def upgrade_schema_0_4_to_0_6(self, db_file, db_schema_ver, code_schema_ver):
         self.backup_database(db_file, db_schema_ver)
-        
+
         self.conn = sqlite3.connect(db_file)
         print 'Upgrading database schema to version ' + code_schema_ver + '...'
-        
+
         # Remove points column from habits audit table
         cursor = self.conn.executescript(
         """
@@ -575,7 +585,7 @@ class HabitJewelDb:
         FROM habits;
         DROP TABLE habits;
         CREATE TABLE habits (
-        id INTEGER,
+        id INTEGER PRIMARY KEY,
         activity TEXT,
         weekly_quota INTEGER,
         priority INTEGER,
@@ -649,6 +659,62 @@ class HabitJewelDb:
         COMMIT;
         """)
         
+        self.add_schema_version_history(code_schema_ver)
+        return True
+
+
+    def upgrade_schema_0_7_to_0_8(self, db_file, db_schema_ver, code_schema_ver):
+        self.backup_database(db_file, db_schema_ver)
+
+        self.conn = sqlite3.connect(db_file)
+        print 'Upgrading database schema to version ' + code_schema_ver + '...'
+
+        # Remove PRIMARY KEY option to id column in habits table
+        cursor = self.conn.executescript(
+        """
+        BEGIN TRANSACTION;
+        CREATE TEMPORARY TABLE habits_tmp(
+        id INTEGER,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits_tmp
+        SELECT id,
+        activity,
+        weekly_quota,
+        priority,
+        measure_id,
+        target,
+        goal_id,
+        created_date,
+        paused_until_date,
+        deleted_date
+        FROM habits;
+        DROP TABLE habits;
+        CREATE TABLE habits (
+        id INTEGER PRIMARY KEY,
+        activity TEXT,
+        weekly_quota INTEGER,
+        priority INTEGER,
+        measure_id INTEGER,
+        target INTEGER,
+        goal_id INTEGER,
+        created_date DATE,
+        paused_until_date DATE,
+        deleted_date DATE);
+        INSERT INTO habits
+        SELECT *
+        FROM habits_tmp;
+        DROP TABLE habits_tmp;
+        COMMIT;
+        """)
+
         self.add_schema_version_history(code_schema_ver)
         return True
 

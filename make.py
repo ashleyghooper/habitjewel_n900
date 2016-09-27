@@ -4,13 +4,13 @@ import pypackager
 import os
 p=pypackager.PyPackager("habitjewel") #package name
 p.display_name = 'HabitJewel' #package display name in HAM
-p.version = '0.7.5' #package version
+p.version = '0.8.0' #package version
 p.buildversion = '0-local' #package build version
 p.description="""Record and track your progress in achieving your daily habits.""" #package description
 p.author='Ashley Hooper' #package author
 p.maintainer='Ashley Hooper' #package maintainer
 p.email='ashleyghooper@gmail.com' #package maintainer email
-p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader, python-gst0.10" #package dependancies
+p.depends = "python2.5, python-hildondesktop, hildon-desktop-python-loader" #package dependancies
 p.section="user/office" #package section
 p.arch="all" #package arch
 p.urgency="low" #package urgency
@@ -31,9 +31,9 @@ chmod 755 /opt/habitjewel/habitjewel.py
 
 #p.postremove="""#!/bin/sh
 #"""
-p.changelog ="""## [0.7.5] - 2016-09-19
+p.changelog ="""## [0.8.0] - 2016-09-26
 ### Changed
-- Ditched gstreamer for calling aplay via os.system() to try to fix battery drain issue
+- Fixed schema upgrade bug that caused habits table to be recreated without primary key
 """ # the changelog
 dir_name='src' #src directory name
 #Here we will loop in all files, directory in src to add it to pkg

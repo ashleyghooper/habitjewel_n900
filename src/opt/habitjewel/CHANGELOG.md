@@ -2,6 +2,9 @@
 ### Added
 
 ### Changed
+## [0.8.0] - 2016-09-26
+### Changed
+- Fixed schema upgrade bug that caused habits table to be recreated without primary key
 
 ## [0.7.5] - 2016-09-19
 ### Changed
