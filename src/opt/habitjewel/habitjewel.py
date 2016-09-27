@@ -19,7 +19,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.7.5' # (major.minor.sub-minor)
+VERSION = '0.8.2' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 # See CHANGELOG.md for detailed change history
@@ -164,8 +164,11 @@ if not os.path.exists(config_dir):
 class MainWindow:
 
     def __init__(self):
+        print APP_DISPLAY_NAME + ' ' + VERSION + ' initialising...'
+        print "Initialising database support..."
         self.db = habitjewel_db.HabitJewelDb(config_dir, VERSION)
 
+        print "Starting up..."
         gettext.install(APP_SYSTEM_NAME,'/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup
@@ -824,36 +827,44 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
     def populate_master_habits_list_ls(self, model, master_habits_list):
         for item in master_habits_list:
-            lstore_iter = model.append()
+            try:
+                # Omit this habit if it is missing an id
+                if not 'id' in item or not item['id']:
+                    continue
 
-            if item['deleted_date']:
-                status = 'deleted'
-            elif item['paused_until_date']:
-                status = 'paused'
-            else:
-                status = 'active'
+                if item['deleted_date']:
+                    status = 'deleted'
+                elif item['paused_until_date']:
+                    status = 'paused'
+                else:
+                    status = 'active'
 
-            activity_markup = item['activity']
+                activity_markup = item['activity']
 
-            if item['null_measure'] != 1:
-                activity_markup += ' <small>' + str(item['target_desc']) + '</small>';
+                if item['null_measure'] != 1:
+                    activity_markup += ' <small>' + str(item['target_desc']) + '</small>';
 
-            icon_pixbuf = self.get_pixbuf_filename_for_master_status(status)
+                icon_pixbuf = self.get_pixbuf_filename_for_master_status(status)
 
-            model.set(lstore_iter, \
-                TV_MASTER_COL_NUM_ID, \
-                    item['id'], \
-                TV_MASTER_COL_NUM_ICON, \
-                    icon_pixbuf, \
-                TV_MASTER_COL_NUM_ACTIVITY, \
-                    activity_markup, \
-                TV_MASTER_COL_NUM_QUOTA_DISP, \
-                    str(item['weekly_quota']) + ' / ' + _('week'), \
-                TV_MASTER_COL_NUM_QUOTA, \
-                    item['weekly_quota'], \
-                TV_MASTER_COL_NUM_STATUS, \
-                    status \
-            )
+                lstore_iter = model.append()
+
+                model.set(lstore_iter, \
+                    TV_MASTER_COL_NUM_ID, \
+                        item['id'], \
+                    TV_MASTER_COL_NUM_ICON, \
+                        icon_pixbuf, \
+                    TV_MASTER_COL_NUM_ACTIVITY, \
+                        activity_markup, \
+                    TV_MASTER_COL_NUM_QUOTA_DISP, \
+                        str(item['weekly_quota']) + ' / ' + _('week'), \
+                    TV_MASTER_COL_NUM_QUOTA, \
+                        item['weekly_quota'], \
+                    TV_MASTER_COL_NUM_STATUS, \
+                        status \
+                )
+            except:
+                # Better to continue than terminate the application
+                continue
 
 
     def get_pixbuf_filename_for_master_status(self, status):
@@ -1080,89 +1091,98 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         day_num_of_week = self.dt_to_day_number(self.view_date_dt)
 
         for item in day_habits_list:
-            lstore_iter = self.day_habits_list_model.append()
-            checkbox_pixbuf = self.get_pixbuf_filename_for_completion_status(item['pct_complete'])
- 
-            activity_markup = item['activity']
+            try:
+                # Omit this habit if it is missing an id
+                if not 'id' in item or not item['id']:
+                    continue
 
-            if item['null_measure'] != 1:
-                activity_markup += ' <i><small>' + str(item['target_desc']) + '</small></i>';
+                checkbox_pixbuf = self.get_pixbuf_filename_for_completion_status(item['pct_complete'])
 
-            if item['weekly_quota'] > 1:
-                if item['completion_total'] > 0:
-                    # Calculate a percentage completion for the week up to the current view date
-                    progress = ((float(item['completion_total']) / float(day_num_of_week)) / float(item['weekly_quota'])) * day_num_of_week * 100
-                else:
-                    progress = 0
+                activity_markup = item['activity']
 
-                highlight_colour = self.completion_pct_to_status_hex_color(progress)
-                activity_markup += ' <span foreground="' + str(highlight_colour) + '"> <small>' + str(item['completion_total']) + '/' + \
-                        str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
+                if item['null_measure'] != 1:
+                    activity_markup += ' <i><small>' + str(item['target_desc']) + '</small></i>';
 
-            # Render the last 7 days history graph for the habit
-            pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
-                    HABIT_RECENT_HIST_PIXBUF_SIZE, HABIT_RECENT_HIST_PIXBUF_SIZE)
-            pixbuf.fill(0x00000000)
-            pixmap, mask = pixbuf.render_pixmap_and_mask()
-
-            pixmap = gtk.gdk.Pixmap(None, HABIT_RECENT_HIST_PIXBUF_SIZE, \
-                    HABIT_RECENT_HIST_BAR_HEIGHT + 8, 16)
-            cr = pixmap.cairo_create()
-
-            # Graph previous 7 days' history for habit, [0:7] returns all but view date
-            #for day in sorted(item['history'][:-1]):
-            for index, day in enumerate(sorted(item['history'])[0:7]):
-                day_completion = item['history'][day]
-                # If we have history for this day...
-                if len(day_completion) > 0:
-
-                    # If missed show red bar, height of 1
-                    if day_completion[0] == 0:
-                        rgb = [0.9, 0.0, 0.0]
-                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT
-                        bar_h = 4
-
-                    # For all other results
+                if item['weekly_quota'] > 1:
+                    if item['completion_total'] > 0:
+                        # Calculate a percentage completion for the week up to the current view date
+                        progress = ((float(item['completion_total']) / float(day_num_of_week)) / float(item['weekly_quota'])) * day_num_of_week * 100
                     else:
-                        # If from preceding week, draw in grey
-                        if day_completion[1] < 0:
-                            rgb = [0.5, 0.5, 0.5]
-                        # Otherwise, based on completion status
+                        progress = 0
+
+                    highlight_colour = self.completion_pct_to_status_hex_color(progress)
+                    activity_markup += ' <span foreground="' + str(highlight_colour) + '"> <small>' + str(item['completion_total']) + '/' + \
+                            str(item['weekly_quota']) + ':' + str(day_num_of_week) + '</small> </span>'
+
+                # Render the last 7 days history graph for the habit
+                pixbuf = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, True, 8, \
+                        HABIT_RECENT_HIST_PIXBUF_SIZE, HABIT_RECENT_HIST_PIXBUF_SIZE)
+                pixbuf.fill(0x00000000)
+                pixmap, mask = pixbuf.render_pixmap_and_mask()
+
+                pixmap = gtk.gdk.Pixmap(None, HABIT_RECENT_HIST_PIXBUF_SIZE, \
+                        HABIT_RECENT_HIST_BAR_HEIGHT + 8, 16)
+                cr = pixmap.cairo_create()
+
+                # Graph previous 7 days' history for habit, [0:7] returns all but view date
+                #for day in sorted(item['history'][:-1]):
+                for index, day in enumerate(sorted(item['history'])[0:7]):
+                    day_completion = item['history'][day]
+                    # If we have history for this day...
+                    if len(day_completion) > 0:
+
+                        # If missed show red bar, height of 1
+                        if day_completion[0] == 0:
+                            rgb = [0.9, 0.0, 0.0]
+                            bar_y = HABIT_RECENT_HIST_BAR_HEIGHT
+                            bar_h = 4
+
+                        # For all other results
                         else:
-                            rgb = self.completion_pct_to_status_rgb_color(day_completion[0])
+                            # If from preceding week, draw in grey
+                            if day_completion[1] < 0:
+                                rgb = [0.5, 0.5, 0.5]
+                            # Otherwise, based on completion status
+                            else:
+                                rgb = self.completion_pct_to_status_rgb_color(day_completion[0])
 
-                        bar_y = (100 - day_completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
-                        bar_h = day_completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                            bar_y = (100 - day_completion[0]) * HABIT_RECENT_HIST_BAR_HEIGHT / 100
+                            bar_h = day_completion[0] * HABIT_RECENT_HIST_BAR_HEIGHT / 100
 
-                # Draw a placeholder since we have no history for this day
-                else:
-                    rgb = self.completion_pct_to_status_rgb_color(-1)
-                    bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
-                    bar_h = 1
+                    # Draw a placeholder since we have no history for this day
+                    else:
+                        rgb = self.completion_pct_to_status_rgb_color(-1)
+                        bar_y = HABIT_RECENT_HIST_BAR_HEIGHT - 1
+                        bar_h = 1
 
-                # Draw the bar
-                cr.set_source_rgb(rgb[0], rgb[1], rgb[2])
-                cr.rectangle(index * 7, bar_y + 4, 5, bar_h)
-                cr.fill()
+                    # Draw the bar
+                    cr.set_source_rgb(rgb[0], rgb[1], rgb[2])
+                    cr.rectangle(index * 7, bar_y + 4, 5, bar_h)
+                    cr.fill()
 
 
-            # Turn pixmap back into pixbuf for Treeview column
-            pixbuf.get_from_drawable(pixmap, gtk.gdk.colormap_get_system(), \
-                    0, 0, 0, 4, -1, -1)
+                # Turn pixmap back into pixbuf for Treeview column
+                pixbuf.get_from_drawable(pixmap, gtk.gdk.colormap_get_system(), \
+                        0, 0, 0, 4, -1, -1)
 
-            # Add the row to the list store
-            self.day_habits_list_model.set(lstore_iter, \
-                TV_DAY_COL_NUM_ID, \
-                    item['id'], \
-                TV_DAY_COL_NUM_ACTIVITY, \
-                    activity_markup, \
-                TV_DAY_COL_NUM_HISTICON, \
-                    pixbuf, \
-                TV_DAY_COL_NUM_CHECKBOX, \
-                    checkbox_pixbuf, \
-                TV_DAY_COL_NUM_PCT_COMPLETE, \
-                    item['pct_complete'] \
-            )
+                lstore_iter = self.day_habits_list_model.append()
+
+                # Add the row to the list store
+                self.day_habits_list_model.set(lstore_iter, \
+                    TV_DAY_COL_NUM_ID, \
+                        item['id'], \
+                    TV_DAY_COL_NUM_ACTIVITY, \
+                        activity_markup, \
+                    TV_DAY_COL_NUM_HISTICON, \
+                        pixbuf, \
+                    TV_DAY_COL_NUM_CHECKBOX, \
+                        checkbox_pixbuf, \
+                    TV_DAY_COL_NUM_PCT_COMPLETE, \
+                        item['pct_complete'] \
+                )
+            except:
+                # Better to continue than terminate the application
+                continue
 
 
     def get_pixbuf_filename_for_completion_status(self, pct_complete):
