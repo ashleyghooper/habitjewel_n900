@@ -3,6 +3,10 @@
 
 ### Changed
 
+## [0.8.2] - 2016-09-27
+### Changed
+- Improvements to terminal output on initialisation
+
 ## [0.8.1] - 2016-09-27
 ### Added
 - try/except blocks to Day and Master habits lists to stop bailing out in case of

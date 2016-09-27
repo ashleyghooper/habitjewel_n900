@@ -19,7 +19,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.8.1' # (major.minor.sub-minor)
+VERSION = '0.8.2' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 # See CHANGELOG.md for detailed change history
@@ -164,8 +164,11 @@ if not os.path.exists(config_dir):
 class MainWindow:
 
     def __init__(self):
+        print APP_DISPLAY_NAME + ' ' + VERSION + ' initialising...'
+        print "Initialising database support..."
         self.db = habitjewel_db.HabitJewelDb(config_dir, VERSION)
 
+        print "Starting up..."
         gettext.install(APP_SYSTEM_NAME,'/opt/habitjewel/share/locale')
 
         # Get today's date and use that as the date displayed on startup

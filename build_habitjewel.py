@@ -46,15 +46,12 @@ chmod 755 /opt/habitjewel/habitjewel.py
     #    """ #Set here your pre install script
     #  p.preremove="""#!/bin/sh
     #  chmod +x /usr/bin/mclock.py""" #Set here your pre remove script
-    version = "0.8.1"          #Version of your software, for example "1.2.0" or "0.8.2"
+    version = "0.8.2"          #Version of your software, for example "1.2.0" or "0.8.2"
     build = "1"                #Build number, for example "1" for the first build of this version of your software. Increment for later re-builds of the same version of your software.
                                 #Text with changelog information to be displayed in the package "Details" tab of the Maemo Application Manager
-    changeloginformation = """## [0.8.1] - 2016-09-27
-### Added
-- try/except blocks to Day and Master habits lists to stop bailing out in case of
-  errors
-- code to fix habits with NULL ids (due to bug in earlier schema update code which
-  recreated habits table without id as PRIMARY KEY)
+    changeloginformation = """## [0.8.2] - 2016-09-27
+### Changed
+- Improvements to terminal output on initialisation
 """
     dir_name = "src"            #Name of the subfolder containing your package source files (for example, usr\share\icons\hicolor\scalable\myappicon.svg, usr\lib\myapp\somelib.py). We suggest to leave it named src in all projects and will refer to that in the wiki article on maemo.org
     #Thanks to DareTheHair from talk.maemo.org for this snippet that recursively builds the file list.

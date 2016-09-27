@@ -24,13 +24,12 @@ class HabitJewelDb:
         # Prepare connection
         db_file = config_dir + '/database'
 
-        # Create the database
+        # If database exists, check schema up to date, otherwise create the database
         if os.path.exists(db_file):
-            print 'Checking database schema version'
             self.conn = sqlite3.connect(db_file)
             self.check_and_upgrade_schema(db_file, code_schema_ver)
         else:
-            print 'creating new database for schema version ' + code_schema_ver
+            print 'creating new database for schema version ' + code_schema_ver + '...'
             self.conn = sqlite3.connect(db_file)
             self.create_new_database(code_schema_ver)
 
@@ -470,7 +469,7 @@ class HabitJewelDb:
 
 
     def fix_habits_with_null_ids(self):
-        print 'Checking for habits with NULL ids'
+        print 'Checking for habits with NULL ids...'
         cursor = self.conn.execute(
             """
             SELECT COUNT(*)
@@ -497,6 +496,7 @@ class HabitJewelDb:
 
 
     def check_and_upgrade_schema(self, db_file, code_schema_ver):
+        print 'Checking database integrity and schema version...'
 
         # Check for habits with null ids and assign them valid ids
         self.fix_habits_with_null_ids()
