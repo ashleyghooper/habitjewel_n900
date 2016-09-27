@@ -3,6 +3,21 @@
 
 ### Changed
 
+## [0.8.2] - 2016-09-27
+### Changed
+- Improvements to terminal output on initialisation
+
+## [0.8.1] - 2016-09-27
+### Added
+- try/except blocks to Day and Master habits lists to stop bailing out in case of
+  errors
+- code to fix habits with NULL ids (due to bug in earlier schema update code which
+  recreated habits table without id as PRIMARY KEY)
+
+## [0.8.0] - 2016-09-26
+### Changed
+- Fixed schema upgrade bug that caused habits table to be recreated without primary key
+
 ## [0.7.5] - 2016-09-19
 ### Changed
 - Ditched gstreamer for calling aplay via os.system() to try to fix battery drain issue
