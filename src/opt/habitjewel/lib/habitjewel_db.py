@@ -26,7 +26,7 @@ class HabitJewelDb:
 
         # Create the database
         if os.path.exists(db_file):
-            print 'checking database schema version'
+            print 'Checking database schema version'
             self.conn = sqlite3.connect(db_file)
             self.check_and_upgrade_schema(db_file, code_schema_ver)
         else:
@@ -469,8 +469,38 @@ class HabitJewelDb:
         return db_schema_ver
 
 
-    def check_and_upgrade_schema(self, db_file, code_schema_ver):
+    def fix_habits_with_null_ids(self):
+        print 'Checking for habits with NULL ids'
+        cursor = self.conn.execute(
+            """
+            SELECT COUNT(*)
+              FROM habits
+             WHERE id IS NULL
+            """)
+
+        row = cursor.fetchone()
+        cursor.close()
+
+        print str(row[0]) + ' habits with NULL ids found'
         
+        if str(row[0]) == str(0):
+            return
+
+        self.conn.execute(
+            """
+            UPDATE habits
+               SET id = ROWID
+             WHERE id IS NULL
+            """)
+
+        self.conn.commit()
+
+
+    def check_and_upgrade_schema(self, db_file, code_schema_ver):
+
+        # Check for habits with null ids and assign them valid ids
+        self.fix_habits_with_null_ids()
+
         db_schema_ver = self.get_current_schema_version()
         if db_schema_ver == code_schema_ver:
             print 'Database schema version (' + db_schema_ver + ') is up to date for this version'
