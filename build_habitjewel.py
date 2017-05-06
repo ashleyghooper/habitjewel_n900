@@ -46,12 +46,13 @@ chmod 755 /opt/habitjewel/habitjewel.py
     #    """ #Set here your pre install script
     #  p.preremove="""#!/bin/sh
     #  chmod +x /usr/bin/mclock.py""" #Set here your pre remove script
-    version = "0.8.2"          #Version of your software, for example "1.2.0" or "0.8.2"
+    version = "0.8.3"          #Version of your software, for example "1.2.0" or "0.8.2"
     build = "1"                #Build number, for example "1" for the first build of this version of your software. Increment for later re-builds of the same version of your software.
                                 #Text with changelog information to be displayed in the package "Details" tab of the Maemo Application Manager
-    changeloginformation = """## [0.8.2] - 2016-09-27
+    changeloginformation = """## [0.8.3] - 2017-05-06
 ### Changed
-- Improvements to terminal output on initialisation
+- Fixed bug with paused habits not showing as paused in Master Habits List
+- Fixed bug with paused habits that had reached the end of the pause period still showing as paused
 """
     dir_name = "src"            #Name of the subfolder containing your package source files (for example, usr\share\icons\hicolor\scalable\myappicon.svg, usr\lib\myapp\somelib.py). We suggest to leave it named src in all projects and will refer to that in the wiki article on maemo.org
     #Thanks to DareTheHair from talk.maemo.org for this snippet that recursively builds the file list.

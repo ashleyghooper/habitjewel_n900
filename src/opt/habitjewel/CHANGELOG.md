@@ -3,6 +3,11 @@
 
 ### Changed
 
+## [0.8.3] - 2017-05-06
+### Changed
+- Fixed bug with paused habits not showing as paused in Master Habits List
+- Fixed bug with paused habits that had reached the end of the pause period still showing as paused
+
 ## [0.8.2] - 2016-09-27
 ### Changed
 - Improvements to terminal output on initialisation
