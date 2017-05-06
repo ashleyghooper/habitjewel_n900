@@ -19,7 +19,7 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.8.2' # (major.minor.sub-minor)
+VERSION = '0.8.3' # (major.minor.sub-minor)
 
 # Minor version changes each time database schema changes 
 # See CHANGELOG.md for detailed change history
@@ -352,6 +352,34 @@ class MainWindow:
 
     # Date utility functions
 
+    def db_date_is_future(self, db_date):
+        if db_date is None:
+            return False
+        try:
+            today_dt = self.get_today_dt()
+            year, month, day = db_date.split('-')
+            if datetime.date(int(year), int(month), int(day)) > today_dt:
+                return True
+            else:
+                return False
+        except:
+            return False
+
+
+    def db_date_is_past(self, db_date):
+        if db_date is None:
+            return False
+        try:
+            today_dt = self.get_today_dt()
+            year, month, day = db_date.split('-')
+            if datetime.date(int(year), int(month), int(day)) <= today_dt:
+                return True
+            else:
+                return False
+        except:
+            return False
+
+
     def db_date_to_dt(self, db_date):
         year, month, day = db_date.split('-')
         return datetime.date(int(year), int(month), int(day))
@@ -500,7 +528,7 @@ class MainWindow:
         button.connect('clicked', self.on_main_menu_go_to_date_click)
         menu.append(button)
 
-        # Stats page not yet implemented
+        # TODO: Stats page
         """
         button = gtk.Button(_('Stats'))
         button.connect('clicked', self.on_main_menu_stats_click)
@@ -834,7 +862,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
                 if item['deleted_date']:
                     status = 'deleted'
-                elif item['paused_until_date']:
+                elif self.db_date_is_future(item['paused_until_date']):
                     status = 'paused'
                 else:
                     status = 'active'
@@ -864,13 +892,14 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 )
             except:
                 # Better to continue than terminate the application
+                print sys.exc_info()[0]
                 continue
 
 
     def get_pixbuf_filename_for_master_status(self, status):
-        if (status == 'deleted'):
+        if status == 'deleted':
             icon_filename = MASTER_STATUS_DELETED_PIXBUF_FILE
-        elif (status == 'paused'):
+        elif status == 'paused':
             icon_filename = MASTER_STATUS_PAUSED_PIXBUF_FILE
         else:
             icon_filename = MASTER_STATUS_ACTIVE_PIXBUF_FILE
@@ -1589,6 +1618,9 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def habit_edit_window(self, habit):
+        # Get current date
+        today_dt = self.get_today_dt()
+
         # Get categories
         categories = self.db.get_categories_list()
 
@@ -1605,8 +1637,6 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     'null_measure':'1', \
                     'priority':'2', \
                     'target':'1', \
-                    'paused_until_date':'', \
-                    'deleted_date':'' \
                     }
             win_title = _(WIN_TITLE_ADD_NEW_HABIT)
         else:
@@ -1687,19 +1717,19 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         # Delete/undelete button
         delete_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        if not self.editing_habit['deleted_date']:
-            delete_btn.set_label(_('Delete'))
-        else:
+        if self.db_date_is_past(self.editing_habit['deleted_date']):
             delete_btn.set_label(_('Undelete'))
+        else:
+            delete_btn.set_label(_('Delete'))
         delete_btn.connect('clicked', self.on_edit_habit_delete_btn_click, status_lbl)
         btn_tbl.attach(delete_btn, 0, 1, 0, 1)
 
         # Pause/unpause button
         pause_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        if not self.editing_habit['paused_until_date']:
-            pause_btn.set_label(_('Pause'))
-        else:
+        if self.db_date_is_future(habit['paused_until_date']):
             pause_btn.set_label(_('Unpause'))
+        else:
+            pause_btn.set_label(_('Pause'))
         pause_btn.connect('clicked', self.on_edit_habit_pause_btn_click, status_lbl)
         btn_tbl.attach(pause_btn, 1, 2, 0, 1)
 
@@ -1758,10 +1788,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def get_edit_habit_status_label_text(self, habit):
-        if 'deleted_date' in habit and habit['deleted_date']:
+        if self.db_date_is_past(habit['deleted_date']):
             habit_info = _('Deleted')
             habit_info += ' ' + self.db_date_to_display_date(habit['deleted_date'])
-        elif 'paused_until_date' in habit and habit['paused_until_date']:
+        elif self.db_date_is_future(habit['paused_until_date']):
             habit_info = _('Paused until')
             habit_info += ' '
             if self.db_date_to_dt(habit['paused_until_date']) == self.get_today_dt():
@@ -1882,7 +1912,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def on_edit_habit_pause_btn_click(self, widget, status_lbl):
-        if self.editing_habit['paused_until_date']:
+        if self.db_date_is_future(self.editing_habit['paused_until_date']):
             widget.set_label(_('Pause'))
             self.editing_habit['paused_until_date'] = None
             status_lbl.set_text(self.get_edit_habit_status_label_text(self.editing_habit))

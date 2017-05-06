@@ -4,7 +4,7 @@ import pypackager
 import os
 p=pypackager.PyPackager("habitjewel") #package name
 p.display_name = 'HabitJewel' #package display name in HAM
-p.version = '0.8.2' #package version
+p.version = '0.8.3' #package version
 p.buildversion = '0-local' #package build version
 p.description="""Record and track your progress in achieving your daily habits.""" #package description
 p.author='Ashley Hooper' #package author
@@ -31,9 +31,10 @@ chmod 755 /opt/habitjewel/habitjewel.py
 
 #p.postremove="""#!/bin/sh
 #"""
-p.changelog ="""## [0.8.2] - 2016-09-27
+p.changelog ="""## [0.8.3] - 2017-05-06
 ### Changed
-- Improvements to terminal output on initialisation
+- Fixed bug with paused habits not showing as paused in Master Habits List
+- Fixed bug with paused habits that had reached the end of the pause period still showing as paused
 """ # the changelog
 dir_name='src' #src directory name
 #Here we will loop in all files, directory in src to add it to pkg

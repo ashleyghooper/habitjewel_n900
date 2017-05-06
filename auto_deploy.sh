@@ -21,6 +21,7 @@ echo "Waiting for file updates in $local_project_path to deploy to $remote_host"
 inotifywait -r -mq --timefmt '%s' --format '%T %w %f %e' \
     -e modify . --exclude '(.*\.sw.|\.git)' | while read epoch dir file event
 do
+    echo "File update event seen for ${dir}${file}"
     event=${event}
     affected_file=${dir}${file}
     event_epoch=${epoch}
