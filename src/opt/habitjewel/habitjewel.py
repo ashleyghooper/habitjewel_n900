@@ -19,9 +19,9 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 
-VERSION = '0.8.3' # (major.minor.sub-minor)
+VERSION = '0.8.4' # (major.minor.sub-minor)
 
-# Minor version changes each time database schema changes 
+# Minor version changes each time database schema changes
 # See CHANGELOG.md for detailed change history
 
 import cairo
@@ -347,7 +347,7 @@ class MainWindow:
 
 
     ###############################
-    ### Date and Calendar functions 
+    ### Date and Calendar functions
     ###############################
 
     # Date utility functions
@@ -408,7 +408,7 @@ class MainWindow:
     def get_today_dt(self):
         today = datetime.date.today()
         return today
-        
+
 
     def get_prev_month_date_dt(self, orig_dt):
         # return datetime object original date + 1 month
@@ -430,7 +430,7 @@ class MainWindow:
         self.cal = self.get_calendar_widget()
         self.cal.select_month((cal_date_dt.month + 12 - 1) % 12, cal_date_dt.year)
         self.cal.select_day(cal_date_dt.day)
-        vbox_cal.pack_start(self.cal, True, True) 
+        vbox_cal.pack_start(self.cal, True, True)
 
         hbox_cal_btns = gtk.HBox(True)
 
@@ -438,17 +438,17 @@ class MainWindow:
             today_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
             today_btn.set_label(_('Today'))
             today_btn.connect('clicked', self.on_cal_today_btn_click, st_win)
-            hbox_cal_btns.pack_start(today_btn, True, True) 
+            hbox_cal_btns.pack_start(today_btn, True, True)
 
         prev_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         prev_month_btn.set_label(_('Previous Month'))
         prev_month_btn.connect('clicked', self.on_cal_prev_month_btn_click, st_win)
-        hbox_cal_btns.pack_start(prev_month_btn, True, True) 
+        hbox_cal_btns.pack_start(prev_month_btn, True, True)
 
         next_month_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
         next_month_btn.set_label(_('Next Month'))
         next_month_btn.connect('clicked', self.on_cal_next_month_btn_click, st_win)
-        hbox_cal_btns.pack_start(next_month_btn, True, True) 
+        hbox_cal_btns.pack_start(next_month_btn, True, True)
 
         vbox_cal.pack_start(hbox_cal_btns, True, True)
 
@@ -459,7 +459,7 @@ class MainWindow:
     # "get" because we are also getting the date from the calendar widget
     def get_gtk_cal_date_to_dt(self, cal):
         year, gtk_month, day = cal.get_date()
-        month = (gtk_month + 1) % 12 
+        month = (gtk_month + 1) % 12
         return datetime.date(int(year), int(month), int(day))
 
 
@@ -787,7 +787,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         img = gtk.image_new_from_icon_name("general_add", gtk.ICON_SIZE_SMALL_TOOLBAR)
         img.set_alignment(0.95, 0.5)
         hbox.pack_start(img, True, True, 0)
-                        
+
         label = gtk.Label(_("New Habit"))
         label.set_alignment(0.05, 0.5)
         hbox.pack_start(label, True, True, 0)
@@ -1094,7 +1094,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                         self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu(True, True)
                     else:
                         self.h_tv_day_activity_cmenu = self.get_day_activity_cmenu()
-                    
+
 
                     # Refresh the status context menu to show the start timer option
                     if show_open_timer:
@@ -1229,7 +1229,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
             icon_filename = HISTORY_CLEAR_PIXBUF_FILE
 
         return gtk.gdk.pixbuf_new_from_file(img_dir + icon_filename)
- 
+
 
     def add_columns_to_day_habits_list_tv(self, treeview):
         # column for ID
@@ -1371,7 +1371,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         st_win.show_all()
         self.cal.connect('day_selected', self.on_day_activity_cmenu_set_pause_cal_date_selected, st_win)
 
- 
+
     def on_day_activity_cmenu_set_pause_cal_date_selected(self, cal, st_win):
         paused_until_date_dt = self.get_gtk_cal_date_to_dt(cal)
         st_win.destroy()
@@ -1507,10 +1507,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         vbox_scale = gtk.VBox(True)
         scale_lbl = gtk.Label(_('Countdown Time (Minutes)'))
-        vbox_scale.pack_start(scale_lbl, True, True) 
+        vbox_scale.pack_start(scale_lbl, True, True)
         vbox_scale.pack_start(scale, True, True)
 
-        box_controls.pack_start(vbox_scale, True, True) 
+        box_controls.pack_start(vbox_scale, True, True)
 
         self.timer_start_stop_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, \
                 hildon.BUTTON_ARRANGEMENT_HORIZONTAL)
@@ -1529,7 +1529,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def set_timer_adjustment_value(self, value):
-        self.timer_adj.set_value(value) 
+        self.timer_adj.set_value(value)
 
 
     def get_timer_start_stop_btn_hbox(self):
@@ -1588,7 +1588,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
         # Timer is running but still has time to go
         elif self.timer['remain_secs'] > TIMER_TIMEOUT_INTERVAL_SECS:
             self.timer['remain_secs'] -= TIMER_TIMEOUT_INTERVAL_SECS
-            new_min = abs(self.timer['remain_secs'] % 60) 
+            new_min = abs(self.timer['remain_secs'] % 60)
             if new_min == 0 or new_min >= 60 - TIMER_TIMEOUT_INTERVAL_SECS:
                 self.set_timer_adjustment_value(self.timer['remain_secs'] * 0.01666666)
             return True
@@ -1637,13 +1637,15 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                     'null_measure':'1', \
                     'priority':'2', \
                     'target':'1', \
+                    'deleted_date':None, \
+                    'paused_until_date':None, \
                     }
             win_title = _(WIN_TITLE_ADD_NEW_HABIT)
         else:
             self.editing_habit = habit
             win_title = _(WIN_TITLE_EDIT_HABIT)
 
-        # Draw new/edit habit form 
+        # Draw new/edit habit form
         # Habit activity
         a_entry = hildon.Entry(gtk.HILDON_SIZE_AUTO)
         # set_placeholder doesn't work for some reason (displays only briefly)
@@ -1717,7 +1719,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         # Delete/undelete button
         delete_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        if self.db_date_is_past(self.editing_habit['deleted_date']):
+        if 'deleted_date' in self.editing_habit and self.db_date_is_past(self.editing_habit['deleted_date']):
             delete_btn.set_label(_('Undelete'))
         else:
             delete_btn.set_label(_('Delete'))
@@ -1726,7 +1728,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
         # Pause/unpause button
         pause_btn = hildon.Button(gtk.HILDON_SIZE_AUTO, hildon.BUTTON_ARRANGEMENT_VERTICAL)
-        if self.db_date_is_future(habit['paused_until_date']):
+        if 'paused_until_date' in self.editing_habit and self.db_date_is_future(self.editing_habit['paused_until_date']):
             pause_btn.set_label(_('Unpause'))
         else:
             pause_btn.set_label(_('Pause'))
@@ -1788,10 +1790,10 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
     def get_edit_habit_status_label_text(self, habit):
-        if self.db_date_is_past(habit['deleted_date']):
+        if 'deleted_date' in habit and self.db_date_is_past(habit['deleted_date']):
             habit_info = _('Deleted')
             habit_info += ' ' + self.db_date_to_display_date(habit['deleted_date'])
-        elif self.db_date_is_future(habit['paused_until_date']):
+        elif 'paused_until_date' in habit and self.db_date_is_future(habit['paused_until_date']):
             habit_info = _('Paused until')
             habit_info += ' '
             if self.db_date_to_dt(habit['paused_until_date']) == self.get_today_dt():
@@ -1808,7 +1810,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
                 habit_info += ')'
             else:
                 habit_info = _('Define habit')
-        return habit_info 
+        return habit_info
 
 
     def on_activity_changed(self, widget):
@@ -1963,7 +1965,7 @@ etc. of all habits, whereas the daily habits view only shows habits for the curr
 
 
 ###################
-# end of MainWindow 
+# end of MainWindow
 ###################
 
 

@@ -3,6 +3,13 @@
 
 ### Changed
 
+## [0.8.4] - 2018-12-26
+### Changed
+- Fixed bug with not being able to create new habit due to 'deleted_date' and 'paused_until_date'
+  keys not having values
+- Fixed bug with not being able to save a new habit due to 'deleted_date' and 'paused_until_date'
+  keys not having been initialised
+
 ## [0.8.3] - 2017-05-06
 ### Changed
 - Fixed bug with paused habits not showing as paused in Master Habits List
